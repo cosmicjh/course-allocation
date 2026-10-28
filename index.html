@@ -1071,7 +1071,7 @@ const gasTransport=(()=>{
     if(!r.ok)throw Object.assign(new Error(r.message||'요청 실패'),{status:r.status,code:r.code});
     return r.data;
   }
-  function accessLogin(){
+  function accessLogin(includeState=false){
     if(loginPending)return loginPending;
     pagesBridge.connect().catch(()=>{});
     loginPending=new Promise(resolve=>{
@@ -1081,7 +1081,10 @@ const gasTransport=(()=>{
       form.onsubmit=async event=>{
         event.preventDefault();const button=form.querySelector('button');button.disabled=true;
         document.querySelector('#access-error').textContent='';
-        try{const code=String(new FormData(form).get('code')),r=await call('/access/login','POST',{code},'');keepInput(r.accessToken);loginPending=null;resolve();}
+        try{
+          const data={code:String(new FormData(form).get('code'))};if(includeState)data.includeState=true;
+          const r=await call('/access/login','POST',data,'');keepInput(r.accessToken);loginPending=null;resolve(r.workspace||null);
+        }
         catch(err){document.querySelector('#access-error').textContent=err.message;button.disabled=false;}
       };
       document.querySelector('#access-form input')?.focus();
@@ -1089,12 +1092,15 @@ const gasTransport=(()=>{
     return loginPending;
   }
   async function request(path,method='GET',data){
-    if(!inputToken)await accessLogin();
+    const initialState=path==='/state'&&method==='GET';
+    if(!inputToken){const workspace=await accessLogin(initialState);if(initialState&&workspace)return workspace;}
     let r;
     try{r=await call(path,method,data,adminToken||inputToken);}
     catch(err){
       if(err.code==='access_required'){
-        adminToken='';keepInput('');await accessLogin();r=await call(path,method,data,inputToken);
+        adminToken='';keepInput('');
+        const workspace=await accessLogin(initialState);if(initialState&&workspace)return workspace;
+        r=await call(path,method,data,inputToken);
       }else{if(err.code==='admin_required')adminToken='';throw err;}
     }
     if(r.accessToken)keepInput(r.accessToken);
