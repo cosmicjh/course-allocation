@@ -50,9 +50,6 @@ h3{font-size:14px;margin-bottom:8px}
 .nav .count{margin-left:auto;border-radius:4px;background:#ffffff12;font-size:10px;padding:2px 5px}
 .workspace{grid-column:2;min-width:0}
 .header-actions{display:flex;align-items:center;gap:10px}
-.mode-switch{display:flex;background:#f0f4f6;border-radius:7px;padding:4px}
-.mode-switch button{font-size:12px;background:none;border:none;color:#7b8c99;padding:8px 12px;border-radius:5px}
-.mode-switch button.active{background:white;box-shadow:0 1px 4px #233f5315;color:#234353}
 main{padding:30px 34px 40px;max-width:1700px;margin:auto}
 .page-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:25px}
 .page-heading p{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:0}
@@ -138,7 +135,6 @@ h1{font-size:24px}
 .page-heading .actions{max-width:180px;justify-content:flex-end}}
 @media(max-width:520px){.nav button{font-size:11px;gap:5px;padding:9px 8px}
 .nav button .icon{display:none}
-.mode-switch button{font-size:11px;padding:8px 9px}
 main{padding:22px 13px}
 .page-heading{display:block}
 .page-heading>.actions{margin-top:15px;max-width:none;justify-content:flex-start}
@@ -181,9 +177,6 @@ input:focus,select:focus{border-color:#777;box-shadow:none}
 .workbook-brand>span{font-size:11px;color:#595959}
 .workbook-header .header-actions{display:flex;align-items:center;justify-content:flex-end;gap:14px;width:auto}
 .workbook-header .header-actions>.primary{font-size:11px;padding:8px 13px;white-space:nowrap}
-.mode-switch{display:flex;gap:2px;padding:2px;background:#f5f5f5;border-radius:5px}
-.mode-switch button{border:0;background:none;color:#595959;font-size:11px;padding:7px 10px;white-space:nowrap}
-.mode-switch button.active{color:#222;background:#fff;box-shadow:0 0 0 1px #e6e6e6}
 .header-save{font-size:10px;color:#595959;white-space:nowrap}
 .workbook-nav{flex-shrink:0;min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 24px;border-bottom:1px solid #e6e6e6}
 .workbook-nav nav{display:flex;align-items:center;gap:20px;min-height:34px}
@@ -274,8 +267,13 @@ input:focus,select:focus{border-color:#777;box-shadow:none}
 .new-course-actions button{padding:5px 8px;margin-right:7px;font-size:10px;color:#595959;border-color:#ddd;background:#fff}
 .allocation-table td.active-cell{position:relative;z-index:2;outline:none;box-shadow:inset 0 0 0 1px #444;background:#e7e7e7}
 .allocation-table td:focus-within:not(.active-cell){outline:none;box-shadow:inset 0 0 0 1px #aaa}
-.sheet-dock{flex-shrink:0;min-width:0;border-top:1px solid #e6e6e6;background:#fff}
-.sheet-tabs{display:flex;align-items:center;gap:4px;padding:7px 20px;overflow:auto;white-space:nowrap;scrollbar-width:thin}
+.sheet-dock{display:flex;align-items:flex-end;gap:8px;padding-right:12px;flex-shrink:0;min-width:0;border-top:1px solid #e6e6e6;background:#fff}
+.sheet-tabs{flex:1;min-width:0;display:flex;align-items:center;gap:4px;padding:7px 20px;overflow:auto;white-space:nowrap;scrollbar-width:thin}
+/* Keep the admin entry at the bottom right, outside the scrolling department tabs. */
+.sheet-dock .admin-entry{flex:0 0 auto;align-self:flex-end;margin:0 0 6px;padding:4px 6px;border:0;border-radius:0;background:none;box-shadow:none;color:#737373;font-size:11px;font-weight:400;line-height:1.4;white-space:nowrap}
+.sheet-dock .admin-entry:hover:not(:disabled){background:none;border:0;box-shadow:none;color:#595959;text-decoration:underline}
+.sheet-dock .admin-entry[aria-pressed=true]{color:#595959;text-decoration:underline}
+.sheet-dock .admin-entry:focus-visible{outline:1px solid #888;outline-offset:1px;text-decoration:underline}
 .sheet-tabs .sheet-tab{flex-shrink:0;border:0;background:none;color:#595959;padding:7px 11px;font-size:11px;border-radius:5px;font-weight:400;min-width:0}
 .sheet-tabs .sheet-tab.active{background:#f0f0f0;color:#222;font-weight:500}
 .sheet-tabs .sheet-tab:hover{background:#f6f6f6}
@@ -305,7 +303,6 @@ dialog::backdrop{background:#0003;backdrop-filter:none}
 .workbook-header{min-height:0;flex-wrap:wrap;padding:14px 16px;gap:12px}
 .workbook-brand strong{font-size:16px}
 .workbook-header .header-actions{width:100%;justify-content:space-between}
-.mode-switch button{font-size:10px;padding:7px 9px}
 .workbook-nav{height:auto;min-height:0;flex-wrap:wrap;padding:0 16px 7px;gap:0}
 .workbook-nav nav{min-height:36px;gap:18px}
 .workbook-nav nav button{font-size:11px}
@@ -1330,14 +1327,14 @@ function render(){
   app.innerHTML=`<div class="workbook">
     <header class="workbook-header">
       <div class="workbook-brand"><strong>교과 시수배당</strong><span>${state.school.year}학년도 ${state.school.semester}학기</span></div>
-      <div class="header-actions"><div class="mode-switch">${btn('mode-admin','관리자','',admin?'active':'',`aria-pressed="${admin}" title="${admin?'관리자 종료':'관리자 로그인'}"`)}</div><span class="header-save">${cloud.loading?'자료 조회 중':cloud.dirty.has(dept().id)||cloud.globalDirty?'저장 전':'저장됨'}</span>${btn('save-sheet',e(dept().name)+' 저장','','primary',`data-id="${dept().id}" ${cloud.saving||cloud.loading?'disabled':''}`)}</div>
+      <div class="header-actions"><span class="header-save">${cloud.loading?'자료 조회 중':cloud.dirty.has(dept().id)||cloud.globalDirty?'저장 전':'저장됨'}</span>${btn('save-sheet',e(dept().name)+' 저장','','primary',`data-id="${dept().id}" ${cloud.saving||cloud.loading?'disabled':''}`)}</div>
     </header>
     <div class="workbook-nav"><nav aria-label="작업 메뉴">${nav.map(([v,n])=>`<button data-view="${v}" class="${ui.view===v?'active':''}" ${ui.view===v?'aria-current="page"':''}>${n}</button>`).join('')}</nav><div class="file-actions">${admin?`${btn('hours-import','분반배정 가져오기','upload','small',cloud.saving||cloud.loading?'disabled':'')}${btn('refresh','불러오기','','small')}${btn('backup','백업','download','small')}${btn('restore','복원','upload','small')}${btn('csv','CSV','download','small')}${btn('reset-data','초기화','','small',cloud.saving||cloud.loading||ui.printing?'disabled':'')}`:''}${btn('print-form','양식 인쇄','','small',ui.printing||cloud.saving||cloud.loading?'disabled':'')}${btn('print-current','입력 내용 인쇄','','small',ui.printing||cloud.saving||cloud.loading?'disabled':'')}</div></div>
     ${ui.mode==='admin'&&ui.importedDeptIds?.some(id=>cloud.dirty.has(id))?`<p class="hours-import-pending">분반배정 가져오기 적용됨 · 저장할 교과군: ${ui.importedDeptIds.filter(id=>cloud.dirty.has(id)).map(id=>e(state.departments.find(d=>d.id===id)?.name)).join(' · ')}</p>`:''}
     ${ui.mode==='admin'&&ui.resetDeptIds?.some(id=>cloud.dirty.has(id))?`<p class="hours-import-pending">초기화 적용됨 · 저장할 교과군: ${ui.resetDeptIds.filter(id=>cloud.dirty.has(id)).map(id=>e(state.departments.find(d=>d.id===id)?.name)).join(' · ')}</p>`:''}
     ${!draft()?`<div class="notice neutral">${e(dept().name)} · ${statusText[dept().status]}</div>`:''}
     <main id="main" class="${ui.view==='sheet'?'sheet-main':'page-main'}">${({sheet:sheetView,settings:settingsView,validation:validationView}[ui.view]??sheetView)()}</main>
-    <footer class="sheet-dock"><div class="sheet-tabs" role="tablist" aria-label="교과군">${state.departments.map(d=>`<button type="button" role="tab" aria-selected="${d.id===dept().id}" data-sheet="${d.id}" class="sheet-tab ${d.id===dept().id?'active':''}">${e(d.name)}<i class="unsaved-dot" ${cloud.dirty.has(d.id)?'':'hidden'}></i></button>`).join('')}${admin?btn('new-dept','+','','sheet-add','aria-label="교과군 추가"'):''}</div></footer>
+    <footer class="sheet-dock"><div class="sheet-tabs" role="tablist" aria-label="교과군">${state.departments.map(d=>`<button type="button" role="tab" aria-selected="${d.id===dept().id}" data-sheet="${d.id}" class="sheet-tab ${d.id===dept().id?'active':''}">${e(d.name)}<i class="unsaved-dot" ${cloud.dirty.has(d.id)?'':'hidden'}></i></button>`).join('')}${admin?btn('new-dept','+','','sheet-add','aria-label="교과군 추가"'):''}</div>${btn('mode-admin','관리자','','admin-entry',`aria-pressed="${admin}" title="${admin?'관리자 종료':'관리자 로그인'}"`)}</footer>
   </div>`;
   applyFrameSize();alignHorizontalScroll(scroll?.left);observeHorizontalFrames();const next=document.querySelector('.sheet-scroll');if(scroll&&next){next.scrollLeft=scroll.left;next.scrollTop=scroll.top;const plan=document.querySelector('.plan-scroll');if(plan){plan.scrollLeft=scroll.left;plan.scrollTop=scroll.planTop;}}const tabs=document.querySelector('.sheet-tabs');if(tabs)tabs.scrollLeft=dockLeft;applyHighlight();
 }
