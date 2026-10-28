@@ -146,6 +146,7 @@ input:focus,select:focus{border-color:#777;box-shadow:none}
 .sheet-tabs .sheet-tab.active{background:#f0f0f0;color:#222;font-weight:500}
 .sheet-tabs .sheet-tab:hover{background:#f6f6f6}
 .sheet-tabs .sheet-add{flex-shrink:0;border:0;padding:2px 10px;background:none;color:#888;font-size:20px;font-weight:300}
+.unsaved-dot[hidden]{display:none}
 .unsaved-dot{display:inline-block;width:4px;height:4px;margin-left:6px;background:#999;vertical-align:middle;border-radius:50%}
 .workbook>.notice{margin:0;border-radius:0;border-width:0 0 1px;padding:9px 24px;flex-shrink:0;font-size:11px;background:#fafafa;color:#777;border-color:#e6e6e6}
 .issue-icon{background:#f3f3f3;color:#888}
@@ -1071,7 +1072,7 @@ const gasTransport=(()=>{
     if(!r.ok)throw Object.assign(new Error(r.message||'요청 실패'),{status:r.status,code:r.code});
     return r.data;
   }
-  function accessLogin(includeState=false){
+  function accessLogin(includeState=false,scoped=false){
     if(loginPending)return loginPending;
     pagesBridge.connect().catch(()=>{});
     loginPending=new Promise(resolve=>{
@@ -1082,7 +1083,7 @@ const gasTransport=(()=>{
         event.preventDefault();const button=form.querySelector('button');button.disabled=true;
         document.querySelector('#access-error').textContent='';
         try{
-          const data={code:String(new FormData(form).get('code'))};if(includeState)data.includeState=true;
+          const data={code:String(new FormData(form).get('code'))};if(includeState){data.includeState=true;if(scoped)data.scoped=true;}
           const r=await call('/access/login','POST',data,'');keepInput(r.accessToken);loginPending=null;resolve(r.workspace||null);
         }
         catch(err){document.querySelector('#access-error').textContent=err.message;button.disabled=false;}
@@ -1092,16 +1093,17 @@ const gasTransport=(()=>{
     return loginPending;
   }
   async function request(path,method='GET',data){
-    const initialState=path==='/state'&&method==='GET';
-    if(!inputToken){const workspace=await accessLogin(initialState);if(initialState&&workspace)return workspace;}
+    const scoped=path==='/workspace',initialState=method==='GET'&&(path==='/state'||scoped&&data===undefined);
+    if(!inputToken){const workspace=await accessLogin(initialState,scoped);if(initialState&&workspace)return workspace;}
     let r;
     try{r=await call(path,method,data,adminToken||inputToken);}
     catch(err){
       if(err.code==='access_required'){
         adminToken='';keepInput('');
-        const workspace=await accessLogin(initialState);if(initialState&&workspace)return workspace;
-        r=await call(path,method,data,inputToken);
-      }else{if(err.code==='admin_required')adminToken='';throw err;}
+        const workspace=await accessLogin(initialState,scoped);if(initialState&&workspace)return workspace;
+        try{r=await call(path,method,data,inputToken);}catch(retry){if(retry.status===404&&scoped)r=await call('/state',method,undefined,inputToken);else throw retry;}
+      }else if(err.status===404&&scoped){r=await call('/state',method,undefined,adminToken||inputToken);}
+      else{if(err.code==='admin_required')adminToken='';throw err;}
     }
     if(r.accessToken)keepInput(r.accessToken);
     if(r.adminToken)adminToken=r.adminToken;
@@ -1114,7 +1116,7 @@ const gasTransport=(()=>{
 
 const app=document.querySelector('#app'),dialog=document.querySelector('#dialog');
 let state,toastTimer;
-const cloud={ready:false,admin:false,saving:false,globalRevision:0,revisions:{},base:{},globalBase:null,dirty:new Set(),globalDirty:false,context:null};
+const cloud={ready:false,admin:false,saving:false,globalRevision:0,revisions:{},base:{},globalBase:null,dirty:new Set(),globalDirty:false,context:null,loaded:new Set(),scoped:true,loading:false,fullLoading:false,loadTicket:0};
 const FRAME_KEY='course-allocation-frame-ratio';
 let frameRatio=null,frameDrag=null;
 try{const saved=localStorage.getItem(FRAME_KEY);if(saved!==null&&Number.isFinite(Number(saved))&&Number(saved)>0&&Number(saved)<100)frameRatio=Number(saved);}catch{}
@@ -1132,10 +1134,10 @@ const items=()=>[...R.catalog,...(state.customCatalog??[])];
 const heading=(t,s,b='')=>`<div class="page-heading"><div><h1>${t}</h1></div><div class="actions">${b}</div></div>`;
 const columns=()=>state.school.grades.flatMap(g=>[...Array.from({length:g.classCount},(_,i)=>({grade:g.grade,label:`${g.grade}-${i+1}`,caption:String(i+1),kind:'homeroom'})),...Array.from({length:g.movingCount},(_,i)=>({grade:g.grade,label:`${g.grade}${C.letter(i+1)}`,caption:`${g.grade}${C.letter(i+1)}`,kind:'moving'}))]);
 function toast(t,error=false){const x=document.querySelector('#toast');x.textContent=t;x.className=`show ${error?'error':''}`;clearTimeout(toastTimer);toastTimer=setTimeout(()=>x.className='',error?6000:3000);}
-function markDirty(){cloud.globalDirty=!S.same(S.globalPart(state),cloud.globalBase);cloud.dirty=new Set(state.departments.filter(d=>!S.same(S.departmentPart(state,d.id),cloud.base[d.id])).map(d=>d.id));}
-function mutate(label,fn){if(!cloud.ready||cloud.saving){toast('연결 또는 저장을 확인하세요.',true);return false;}try{const next=C.clone(state);fn(next);C.assertState(next);next.history.unshift({at:new Date().toISOString(),action:label});next.history=next.history.slice(0,200);state=next;markDirty();render();return true;}catch(err){toast(err.message,true);return false;}}
+
+function mutate(label,fn){if(!cloud.ready||cloud.saving||cloud.loading){toast('연결 또는 저장을 확인하세요.',true);return false;}try{const next=C.clone(state);fn(next);C.assertState(next);next.history.unshift({at:new Date().toISOString(),action:label});next.history=next.history.slice(0,200);state=next;for(const d of state.departments)if(!cloud.globalBase.departmentIds.includes(d.id))cloud.loaded.add(d.id);markDirty();render();return true;}catch(err){toast(err.message,true);return false;}}
 function route(v){if(v==='settings'&&!cloud.admin){loginDialog();return;}ui.view=v;render();}
-function selectDept(id){ui.deptId=id;ui.newCourse='';cloud.context=null;ui.catalogGroup=R.suggestedGroup(dept().name);render();}
+
 var GridUi=(function(){
 function canAllocate(state,teacherId,group){
   if(!group)return false;
@@ -1185,7 +1187,7 @@ document.fonts?.ready?.then?.(scheduleHorizontalAlignment);
 document.fonts?.addEventListener?.('loadingdone',scheduleHorizontalAlignment);
 
 function render(){
-  if(renderPause){paintPending=true;return;}paintPending=false;
+  if(renderPause){paintPending=true;return;}paintPending=false;pendingCellPaint=[];panelPaintPending=false;
   if(rowOrderGesture||rowOrderKeyboard)cancelRowOrder();
   ui.deptId=dept().id;
   const old=document.querySelector('.sheet-scroll'),oldPlan=document.querySelector('.plan-scroll'),scroll=old?{left:old.scrollLeft,top:old.scrollTop,planTop:oldPlan?.scrollTop??0}:null;
@@ -1194,14 +1196,14 @@ function render(){
   app.innerHTML=`<div class="workbook">
     <header class="workbook-header">
       <div class="workbook-brand"><strong>교과 시수배당</strong><span>${state.school.year}학년도 ${state.school.semester}학기</span></div>
-      <div class="header-actions"><div class="mode-switch">${btn('mode-admin','관리자','',admin?'active':'',`aria-pressed="${admin}" title="${admin?'관리자 종료':'관리자 로그인'}"`)}</div><span class="header-save">${cloud.dirty.has(dept().id)||cloud.globalDirty?'저장 전':'저장됨'}</span>${btn('save-sheet',e(dept().name)+' 저장','','primary',`data-id="${dept().id}" ${cloud.saving?'disabled':''}`)}</div>
+      <div class="header-actions"><div class="mode-switch">${btn('mode-admin','관리자','',admin?'active':'',`aria-pressed="${admin}" title="${admin?'관리자 종료':'관리자 로그인'}"`)}</div><span class="header-save">${cloud.loading?'자료 조회 중':cloud.dirty.has(dept().id)||cloud.globalDirty?'저장 전':'저장됨'}</span>${btn('save-sheet',e(dept().name)+' 저장','','primary',`data-id="${dept().id}" ${cloud.saving||cloud.loading?'disabled':''}`)}</div>
     </header>
-    <div class="workbook-nav"><nav aria-label="작업 메뉴">${nav.map(([v,n])=>`<button data-view="${v}" class="${ui.view===v?'active':''}" ${ui.view===v?'aria-current="page"':''}>${n}</button>`).join('')}</nav><div class="file-actions">${admin?`${btn('hours-import','분반배정 가져오기','upload','small',cloud.saving?'disabled':'')}${btn('refresh','불러오기','','small')}${btn('backup','백업','download','small')}${btn('restore','복원','upload','small')}${btn('csv','CSV','download','small')}${btn('reset-data','초기화','','small',cloud.saving||ui.printing?'disabled':'')}`:''}${btn('print-form','양식 인쇄','','small',ui.printing||cloud.saving?'disabled':'')}${btn('print-current','입력 내용 인쇄','','small',ui.printing||cloud.saving?'disabled':'')}</div></div>
+    <div class="workbook-nav"><nav aria-label="작업 메뉴">${nav.map(([v,n])=>`<button data-view="${v}" class="${ui.view===v?'active':''}" ${ui.view===v?'aria-current="page"':''}>${n}</button>`).join('')}</nav><div class="file-actions">${admin?`${btn('hours-import','분반배정 가져오기','upload','small',cloud.saving||cloud.loading?'disabled':'')}${btn('refresh','불러오기','','small')}${btn('backup','백업','download','small')}${btn('restore','복원','upload','small')}${btn('csv','CSV','download','small')}${btn('reset-data','초기화','','small',cloud.saving||cloud.loading||ui.printing?'disabled':'')}`:''}${btn('print-form','양식 인쇄','','small',ui.printing||cloud.saving||cloud.loading?'disabled':'')}${btn('print-current','입력 내용 인쇄','','small',ui.printing||cloud.saving||cloud.loading?'disabled':'')}</div></div>
     ${ui.mode==='admin'&&ui.importedDeptIds?.some(id=>cloud.dirty.has(id))?`<p class="hours-import-pending">분반배정 가져오기 적용됨 · 저장할 교과군: ${ui.importedDeptIds.filter(id=>cloud.dirty.has(id)).map(id=>e(state.departments.find(d=>d.id===id)?.name)).join(' · ')}</p>`:''}
     ${ui.mode==='admin'&&ui.resetDeptIds?.some(id=>cloud.dirty.has(id))?`<p class="hours-import-pending">초기화 적용됨 · 저장할 교과군: ${ui.resetDeptIds.filter(id=>cloud.dirty.has(id)).map(id=>e(state.departments.find(d=>d.id===id)?.name)).join(' · ')}</p>`:''}
     ${!draft()?`<div class="notice neutral">${e(dept().name)} · ${statusText[dept().status]}</div>`:''}
     <main id="main" class="${ui.view==='sheet'?'sheet-main':'page-main'}">${({sheet:sheetView,settings:settingsView,validation:validationView}[ui.view]??sheetView)()}</main>
-    <footer class="sheet-dock"><div class="sheet-tabs" role="tablist" aria-label="교과군">${state.departments.map(d=>`<button type="button" role="tab" aria-selected="${d.id===dept().id}" data-sheet="${d.id}" class="sheet-tab ${d.id===dept().id?'active':''}">${e(d.name)}${cloud.dirty.has(d.id)?'<i class="unsaved-dot"></i>':''}</button>`).join('')}${admin?btn('new-dept','+','','sheet-add','aria-label="교과군 추가"'):''}</div></footer>
+    <footer class="sheet-dock"><div class="sheet-tabs" role="tablist" aria-label="교과군">${state.departments.map(d=>`<button type="button" role="tab" aria-selected="${d.id===dept().id}" data-sheet="${d.id}" class="sheet-tab ${d.id===dept().id?'active':''}">${e(d.name)}<i class="unsaved-dot" ${cloud.dirty.has(d.id)?'':'hidden'}></i></button>`).join('')}${admin?btn('new-dept','+','','sheet-add','aria-label="교과군 추가"'):''}</div></footer>
   </div>`;
   applyFrameSize();alignHorizontalScroll(scroll?.left);observeHorizontalFrames();const next=document.querySelector('.sheet-scroll');if(scroll&&next){next.scrollLeft=scroll.left;next.scrollTop=scroll.top;const plan=document.querySelector('.plan-scroll');if(plan){plan.scrollLeft=scroll.left;plan.scrollTop=scroll.planTop;}}const tabs=document.querySelector('.sheet-tabs');if(tabs)tabs.scrollLeft=dockLeft;applyHighlight();
 }
@@ -1234,7 +1236,7 @@ return {key,move,drop};
 let rowOrderGesture=null,rowOrderKeyboard=null,rowOrderAnimation=0;
 function assertRowOrder(kind){
   Order.key(kind);
-  if(!cloud.ready||cloud.saving||ui.printing||ui.view!=='sheet')throw new Error('배당표 연결 또는 저장 상태를 확인하세요.');
+  if(!cloud.ready||cloud.saving||cloud.loading||ui.printing||ui.view!=='sheet')throw new Error('배당표 연결 또는 저장 상태를 확인하세요.');
   if(kind==='course'&&(!cloud.admin||ui.mode!=='admin'))throw new Error('개설 과목 순서는 관리자만 변경할 수 있습니다.');
   C.assertDraft(state,dept().id);
 }
@@ -1363,10 +1365,10 @@ window.addEventListener('blur',()=>cancelRowOrder());
 window.addEventListener('resize',()=>{if(rowOrderGesture||rowOrderKeyboard)cancelRowOrder('순서 변경을 취소했습니다.');});
 
 function sheetView(){
-  const d=dept(),cs=C.coursesOf(state,d.id),ts=C.teachersOf(state,d.id),cols=columns(),admin=ui.mode==='admin',editable=draft()&&!cloud.saving,m=C.metrics(state,d.id);
-  const top=cs.map((c,ci)=>{const gs=C.groupsOf(state,c.id);return `<tr class="plan-row" data-course="${c.id}"><td class="sticky-teacher plan-grade"><div class="plan-grade-content"><span>${c.grade}학년</span>${admin?rowOrderHandle('course',c.id,`${c.grade}학년 ${c.name}`,editable&&cs.length>1):''}</div></td><td class="sticky-subject">${admin?`<select data-edit="course-name" data-id="${c.id}" aria-label="${c.grade}학년 ${e(c.name)} 개설 과목" ${editable?'':'disabled'}>${courseOptions(c)}</select><div class="course-cell-tools">${btn('configure-group','분반','','mini',`data-id="${c.id}" ${editable?'':'disabled'}`)}${btn('remove-course','삭제','','mini',`data-id="${c.id}" aria-label="${e(c.name)} 개설 취소" ${editable?'':'disabled'}`)}</div>`:`${e(c.name)}`}</td>${cols.map(col=>{if(col.grade!==c.grade)return '<td class="inactive-cell"></td>';const g=gs.find(g=>g.label===col.label);if(g&&C.isSplitGroup(g)){const p=C.groupPlan(g);return `<td class="plan-cell large-cell" data-plan-column="${col.label}"><button class="split-plan-button" data-action="edit-group" data-id="${g.id}" title="${p.label} · 총 ${p.total}시간" aria-label="${e(c.name)} ${g.label} ${p.label} 분반 설정" ${admin&&editable?'':'disabled'}><span>${p.total}</span><small>${g.slots.map(s=>s.label).join('·')}</small></button></td>`;}return `<td class="plan-cell ${g?.review?'review-cell':''}" data-plan-column="${col.label}"><input data-edit="planned" data-course="${c.id}" data-column="${col.label}" type="number" min="0" max="40" value="${g?.slots[0].hours??''}" aria-label="${e(c.name)} ${col.label} 분반당 시수" ${admin&&editable?'':'disabled'}>${admin?btn('configure-group','⋯','','cell-detail',`data-id="${c.id}" data-column="${col.label}" aria-label="${e(c.name)} ${col.label} 분반 설정" ${editable?'':'disabled'}`):''}</td>`;}).join('')}<td class="sum-cell">${C.sum(gs.flatMap(g=>g.slots.map(s=>s.hours)))}</td></tr>`;}).join('');
+  const d=dept(),gm=gridModel(),cs=gm.courses,ts=gm.teachers,cols=columns(),admin=ui.mode==='admin',editable=draft()&&!cloud.saving&&!cloud.loading,m=C.metrics(state,d.id);
+  const top=cs.map((c,ci)=>{const gs=gm.groups(c.id);return `<tr class="plan-row" data-course="${c.id}"><td class="sticky-teacher plan-grade"><div class="plan-grade-content"><span>${c.grade}학년</span>${admin?rowOrderHandle('course',c.id,`${c.grade}학년 ${c.name}`,editable&&cs.length>1):''}</div></td><td class="sticky-subject">${admin?`<select data-edit="course-name" data-id="${c.id}" aria-label="${c.grade}학년 ${e(c.name)} 개설 과목" ${editable?'':'disabled'}>${courseOptions(c)}</select><div class="course-cell-tools">${btn('configure-group','분반','','mini',`data-id="${c.id}" ${editable?'':'disabled'}`)}${btn('remove-course','삭제','','mini',`data-id="${c.id}" aria-label="${e(c.name)} 개설 취소" ${editable?'':'disabled'}`)}</div>`:`${e(c.name)}`}</td>${cols.map(col=>{if(col.grade!==c.grade)return '<td class="inactive-cell"></td>';const g=gs.find(g=>g.label===col.label);if(g&&C.isSplitGroup(g)){const p=C.groupPlan(g);return `<td class="plan-cell large-cell" data-plan-column="${col.label}"><button class="split-plan-button" data-action="edit-group" data-id="${g.id}" title="${p.label} · 총 ${p.total}시간" aria-label="${e(c.name)} ${g.label} ${p.label} 분반 설정" ${admin&&editable?'':'disabled'}><span>${p.total}</span><small>${g.slots.map(s=>s.label).join('·')}</small></button></td>`;}return `<td class="plan-cell ${g?.review?'review-cell':''}" data-plan-column="${col.label}"><input data-edit="planned" data-course="${c.id}" data-column="${col.label}" type="number" min="0" max="40" value="${g?.slots[0].hours??''}" aria-label="${e(c.name)} ${col.label} 분반당 시수" ${admin&&editable?'':'disabled'}>${admin?btn('configure-group','⋯','','cell-detail',`data-id="${c.id}" data-column="${col.label}" aria-label="${e(c.name)} ${col.label} 분반 설정" ${editable?'':'disabled'}`):''}</td>`;}).join('')}<td class="sum-cell">${C.sum(gs.flatMap(g=>g.slots.map(s=>s.hours)))}</td></tr>`;}).join('');
   const appendCourse=admin?`<tr class="new-course-row"><td class="sticky-teacher"><select data-control="new-grade" aria-label="새 과목 학년" ${editable?'':'disabled'}>${[1,2,3].map(g=>`<option value="${g}" ${g===ui.grade?'selected':''}>${g}학년</option>`).join('')}</select></td><td class="sticky-subject"><select data-control="new-course" aria-label="새 개설 과목" ${editable?'':'disabled'}>${courseOptions(null,ui.newCourse)}</select></td><td colspan="${cols.length+1}" class="new-course-actions">${btn('add-course','과목 개설','plus','small',editable?'':'disabled')}</td></tr>`:'';
-  const body=ts.map((t,ti)=>{const rows=C.teacherRows(state,t.id),unmapped=state.unmapped.filter(a=>a.teacherId===t.id);return rows.map((r,ri)=>{const c=cs.find(c=>c.id===r.courseId),gs=c?C.groupsOf(state,c.id):[];return `<tr class="teacher-row ${ri===0?'teacher-start':''}" data-teacher="${t.id}" data-course="${r.courseId}">${ri===0?`<td class="sticky-teacher teacher-name-cell" data-teacher="${t.id}" rowspan="${rows.length}"><div class="teacher-identity"><input data-edit="teacher-name" data-id="${t.id}" value="${e(t.name)}" placeholder="교사명" size="4" maxlength="50" aria-label="교사 ${ti+1} 이름" ${editable?'':'disabled'}><label class="lead-teacher"><input type="checkbox" data-edit="teacher-lead" data-id="${t.id}" aria-label="교사 ${ti+1} 부장" ${t.isLead?'checked':''} ${editable?'':'disabled'}><span>부장</span></label></div><div class="teacher-row-actions">${rowOrderHandle('teacher',t.id,C.teacherLabel(t,ti),editable&&ts.length>1)}${btn('new-teacher-subject','+ 과목','','mini',`data-id="${t.id}" ${editable?'':'disabled'}`)}${btn('delete-teacher','교사 삭제','','mini muted',`data-id="${t.id}" ${editable?'':'disabled'}`)}</div>${unmapped.length?`<button class="unmapped-link" data-action="alias" data-id="${t.id}">과목 연결 ${C.sum(unmapped.map(a=>a.hours))}h</button>`:''}</td>`:''}<td class="sticky-subject teacher-subject-cell"><div class="teacher-course-control"><select data-edit="teacher-course" data-teacher="${t.id}" data-row="${r.id}" aria-label="교사 ${ti+1} 담당 과목" ${editable?'':'disabled'}><option value="">담당 과목 선택</option>${cs.map(x=>`<option value="${x.id}" ${x.id===r.courseId?'selected':''}>${e(x.name)} (${x.grade}학년)</option>`).join('')}</select>${c||rows.length>1?btn('remove-teacher-course','삭제','','course-delete',`data-teacher="${t.id}" data-row="${r.id}" aria-label="교사 ${ti+1} ${e(c?.name??'빈 과목 행')} 삭제" ${editable?'':'disabled'}`):''}</div></td>${cols.map(col=>{if(!c||col.grade!==c.grade)return '<td class="inactive-cell"></td>';const g=gs.find(g=>g.label===col.label);if(!g)return '<td class="unopened-cell"></td>';const ready=ui.mode==='input'&&editable&&GridUi.canAllocate(state,t.id,g)?'allocation-ready':'';if(g.legacy.length){const h=C.sum(g.legacy.filter(a=>a.teacherId===t.id).map(a=>a.hours));return `<td class="pending-cell ${C.isSplitGroup(g)?'large-cell':''} ${ready}">${btn('resolve-pool',h||'·','','cell-button',`data-id="${g.id}" data-teacher="${t.id}" title="원본 합산 배정을 하위 분반에 나누기" ${editable?'':'disabled'}`)}</td>`;}if(C.isSplitGroup(g)){const actual=g.slots.map(s=>({label:s.label,hours:state.assignments.find(a=>a.teacherId===t.id&&a.sectionId===s.id)?.hours??0})).filter(a=>a.hours),h=C.sum(actual.map(a=>a.hours)),labels=actual.map(a=>a.label).join(' · ');return `<td class="large-cell ${ready}"><button type="button" data-action="teacher-split" data-id="${g.id}" data-teacher="${t.id}" class="cell-button split-assignment" title="${labels||'실제 분반 선택'}" aria-label="교사 ${ti+1} ${g.label} 실제 분반 배정" ${editable?'':'disabled'}><span>${h||'선택'}</span>${labels?`<small>${e(labels)}</small>`:''}</button></td>`;}const s=g.slots[0],h=state.assignments.find(a=>a.teacherId===t.id&&a.sectionId===s.id)?.hours??'';return `<td class="assignment-cell ${ready}"><input data-edit="allocation" data-teacher="${t.id}" data-section="${s.id}" type="number" min="0" max="${s.hours}" value="${h}" aria-label="교사 ${ti+1} ${e(c.name)} ${col.label} 담당 시수" ${editable?'':'disabled'}></td>`;}).join('')}${ri===0?`<td class="sum-cell teacher-sum" rowspan="${rows.length}">${C.teacherHours(state,t.id)||''}</td>`:''}</tr>`;}).join('');}).join('');
+  const body=ts.map((t,ti)=>{const rows=gm.rows(t),unmapped=gm.unmapped(t.id);return rows.map((r,ri)=>{const c=cs.find(c=>c.id===r.courseId),gs=c?gm.groups(c.id):[];return `<tr class="teacher-row ${ri===0?'teacher-start':''}" data-teacher="${t.id}" data-course="${r.courseId}">${ri===0?`<td class="sticky-teacher teacher-name-cell" data-teacher="${t.id}" rowspan="${rows.length}"><div class="teacher-identity"><input data-edit="teacher-name" data-id="${t.id}" value="${e(t.name)}" placeholder="교사명" size="4" maxlength="50" aria-label="교사 ${ti+1} 이름" ${editable?'':'disabled'}><label class="lead-teacher"><input type="checkbox" data-edit="teacher-lead" data-id="${t.id}" aria-label="교사 ${ti+1} 부장" ${t.isLead?'checked':''} ${editable?'':'disabled'}><span>부장</span></label></div><div class="teacher-row-actions">${rowOrderHandle('teacher',t.id,C.teacherLabel(t,ti),editable&&ts.length>1)}${btn('new-teacher-subject','+ 과목','','mini',`data-id="${t.id}" ${editable?'':'disabled'}`)}${btn('delete-teacher','교사 삭제','','mini muted',`data-id="${t.id}" ${editable?'':'disabled'}`)}</div>${unmapped.length?`<button class="unmapped-link" data-action="alias" data-id="${t.id}">과목 연결 ${C.sum(unmapped.map(a=>a.hours))}h</button>`:''}</td>`:''}<td class="sticky-subject teacher-subject-cell"><div class="teacher-course-control"><select data-edit="teacher-course" data-teacher="${t.id}" data-row="${r.id}" aria-label="교사 ${ti+1} 담당 과목" ${editable?'':'disabled'}><option value="">담당 과목 선택</option>${cs.map(x=>`<option value="${x.id}" ${x.id===r.courseId?'selected':''}>${e(x.name)} (${x.grade}학년)</option>`).join('')}</select>${c||rows.length>1?btn('remove-teacher-course','삭제','','course-delete',`data-teacher="${t.id}" data-row="${r.id}" aria-label="교사 ${ti+1} ${e(c?.name??'빈 과목 행')} 삭제" ${editable?'':'disabled'}`):''}</div></td>${cols.map(col=>{if(!c||col.grade!==c.grade)return '<td class="inactive-cell"></td>';const g=gs.find(g=>g.label===col.label);if(!g)return '<td class="unopened-cell"></td>';const ready=ui.mode==='input'&&editable&&gm.canAllocate(t.id,g)?'allocation-ready':'';if(g.legacy.length){const h=C.sum(g.legacy.filter(a=>a.teacherId===t.id).map(a=>a.hours));return `<td class="pending-cell ${C.isSplitGroup(g)?'large-cell':''} ${ready}">${btn('resolve-pool',h||'·','','cell-button',`data-id="${g.id}" data-teacher="${t.id}" title="원본 합산 배정을 하위 분반에 나누기" ${editable?'':'disabled'}`)}</td>`;}if(C.isSplitGroup(g)){const actual=g.slots.map(s=>({label:s.label,hours:gm.assignment(t.id,s.id)})).filter(a=>a.hours),h=C.sum(actual.map(a=>a.hours)),labels=actual.map(a=>a.label).join(' · ');return `<td class="large-cell ${ready}"><button type="button" data-action="teacher-split" data-id="${g.id}" data-teacher="${t.id}" class="cell-button split-assignment" title="${labels||'실제 분반 선택'}" aria-label="교사 ${ti+1} ${g.label} 실제 분반 배정" ${editable?'':'disabled'}><span>${h||'선택'}</span>${labels?`<small>${e(labels)}</small>`:''}</button></td>`;}const s=g.slots[0],h=gm.assignment(t.id,s.id)||'';return `<td class="assignment-cell ${ready}"><input data-edit="allocation" data-teacher="${t.id}" data-section="${s.id}" type="number" min="0" max="${s.hours}" value="${h}" aria-label="교사 ${ti+1} ${e(c.name)} ${col.label} 담당 시수" ${editable?'':'disabled'}></td>`;}).join('')}${ri===0?`<td class="sum-cell teacher-sum" data-teacher-sum="${t.id}" rowspan="${rows.length}">${gm.hours(t.id)||''}</td>`:''}</tr>`;}).join('');}).join('');
   const tableStyle=`width:calc(var(--frozen-width) + var(--class-width) * ${cols.length} + var(--total-width))`,colgroup=`<colgroup><col class="teacher-width"><col class="subject-width">${cols.map(()=>'<col class="class-width">').join('')}<col class="total-width"></colgroup>`;
   const classHeaders=cols.map(col=>`<th scope="col" data-column="${col.label}" class="${col.kind==='moving'?'moving-head':''}">${col.caption}</th>`).join('');
   return `<div class="sheet-heading"><div class="sheet-title-line"><h1>${e(d.name)}</h1>${admin?btn('rename-dept','이름 변경','','small ghost',draft()?'':'disabled'):''}<span class="sheet-overview">${m.courseCount}개 과목 · ${m.planned}시간</span>${badge(statusText[d.status])}</div><div class="selection-context" role="status" aria-live="polite"></div></div>
@@ -1431,7 +1433,7 @@ function focusCell(selector,{select=true,scroll=false}={}){
   return x;
 }
 document.addEventListener('click',async event=>{
-  const b=event.target.closest('button');if(!b)return;if(b.dataset.view){route(b.dataset.view);return;}if(b.dataset.sheet){ui.view='sheet';selectDept(b.dataset.sheet);return;}const id=b.dataset.id;if(['backup','restore','csv','hours-import','reset-data'].includes(b.dataset.action)&&!cloud.admin){loginDialog();return;}
+  const b=event.target.closest('button');if(!b)return;if(b.dataset.view){if(!cloud.loading&&!cloud.saving)route(b.dataset.view);return;}if(b.dataset.sheet){ui.view='sheet';await selectDept(b.dataset.sheet);return;}const id=b.dataset.id;if(cloud.loading||cloud.saving){toast('자료 조회 또는 저장이 끝난 뒤 다시 실행하세요.',true);return;}if(['backup','restore','csv','hours-import','reset-data'].includes(b.dataset.action)&&!cloud.admin){loginDialog();return;}
   const actions={
     'reset-data':resetDialog,'print-current':printCurrentForm,
     'hours-import':()=>{requireImportAdmin();document.querySelector('#hours-import-file').value='';document.querySelector('#hours-import-file').click();},
@@ -1444,7 +1446,7 @@ document.addEventListener('click',async event=>{
     'remove-group':()=>{const label=document.querySelector('#group-parent').value,g=C.groupsOf(state,id).find(g=>g.label===label);if(!g)throw new Error('개설된 분반을 선택하세요.');C.removeGroup(C.clone(state),g.id);confirmDialog('분반 개설 해제',`${g.label}의 실제 분반 ${g.slots.length}개를 개설 해제합니다.`,()=>mutate(`${g.label} 분반 개설 해제`,s=>C.removeGroup(s,g.id)),'개설 해제');},'configure-group':()=>groupDialog(id,b.dataset.column),'edit-group':()=>{const g=state.groups.find(g=>g.id===id);groupDialog(g.courseId,g.label);},'remove-teacher-course':()=>removeTeacherCourse(b.dataset.teacher,b.dataset.row),'fill-section':()=>{document.querySelector('#split-'+id).value=b.dataset.value;},'resolve-pool':()=>poolDialog(id),'teacher-split':()=>teacherSplitDialog(id,b.dataset.teacher),'alias':()=>aliasDialog(id),
     'add-course':()=>{const item=items().find(c=>c.id===ui.newCourse);if(!item)throw new Error('개설할 과목을 선택하세요.');if(mutate(`${item.name} 개설`,s=>openCatalogItem(s,item,ui.grade))){ui.newCourse='';render();}},
     'remove-course':()=>{const c=state.courses.find(c=>c.id===id);confirmDialog('개설 과목 삭제',`${e(c.name)} (${c.grade}학년)을 이 시트에서 삭제합니다. 과목 목록에는 남습니다.`,()=>mutate(`${c.name} 개설 취소`,s=>C.removeCourse(s,id)),'삭제');},
-    'backup':()=>download(`교과시수배당_${state.school.year}_${state.school.semester}학기_백업.json`,JSON.stringify(state,null,2),'application/json;charset=utf-8'),
+    'backup':async()=>{await ensureAllDepartments();download(`교과시수배당_${state.school.year}_${state.school.semester}학기_백업.json`,JSON.stringify(state,null,2),'application/json;charset=utf-8');},
     'restore':()=>{document.querySelector('#backup-file').value='';document.querySelector('#backup-file').click();},'csv':()=>download(`교과시수배당_${state.school.year}_${dept().name}.csv`,C.csv(state,dept().id),'text/csv;charset=utf-8'),
     'save-sheet':()=>saveSheet(b.dataset.id),'refresh':refreshServer,'print-form':printBlankForm,'password':passwordDialog,'access-password':accessPasswordDialog,'close-dialog':()=>dialog.close(),
     'submit':()=>{const issues=C.validate(state,dept().id);if(issues.length){toast(`${issues.length}개 확인 항목을 해결하세요.`,true);return;}confirmDialog('배당표 제출','제출하면 수정을 잠급니다. 관리자가 입력을 다시 열 수 있습니다.',()=>mutate(`${dept().name} 제출`,s=>C.changeStatus(s,dept().id,'submitted')),'제출');},
@@ -1457,9 +1459,78 @@ function saveInput(input){const type=input.dataset.edit,id=input.dataset.id,v=in
   if(type==='teacher-lead'&&Boolean(state.teachers.find(t=>t.id===id)?.isLead)===input.checked)return true;
   if(type==='teacher-course'&&C.teacherRows(state,input.dataset.teacher).find(r=>r.id===input.dataset.row)?.courseId===v)return true;
   if(type==='planned'){const g=C.groupsOf(state,input.dataset.course).find(g=>g.label===input.dataset.column);if((g?.slots[0]?.hours??0)===Number(v||0))return true;}
-  if(type==='teacher-name'&&state.teachers.find(t=>t.id===id)?.name===v.trim())return true;if(type==='allocation'&&(state.assignments.find(a=>a.sectionId===input.dataset.section&&a.teacherId===input.dataset.teacher)?.hours??0)===Number(v||0))return true;return mutate(({'course-name':'개설 과목 변경',planned:'분반별 필요 시수 입력','teacher-lead':'부장 표시 변경','teacher-name':'교사명 입력','teacher-course':'교사 담당 과목 지정',allocation:'교사별 담당 시수 입력'})[type],handlers[type]);}
-document.addEventListener('change',event=>{const x=event.target,c=x.dataset.control;if(c==='new-course'){ui.newCourse=x.value;return;}if(c==='new-grade'){ui.grade=Number(x.value);return;}if(c==='group-parent'){chooseGroupParent(x.dataset.course,x.value);return;}if(c==='group-preview'){updateGroupPreview();return;}if(x.dataset.edit){const committed=committedFields.get(x);committedFields.delete(x);if(committed&&committed.value===x.value&&committed.checked===x.checked)return;const focused=document.activeElement===x,selector=controlSelector(x);saveInput(x);render();if(focused&&selector)focusCell(selector,{select:false});}});
+  if(type==='teacher-name'&&state.teachers.find(t=>t.id===id)?.name===v.trim())return true;if(type==='allocation'&&(state.assignments.find(a=>a.sectionId===input.dataset.section&&a.teacherId===input.dataset.teacher)?.hours??0)===Number(v||0))return true;return mutateCell(({'course-name':'개설 과목 변경',planned:'분반별 필요 시수 입력','teacher-lead':'부장 표시 변경','teacher-name':'교사명 입력','teacher-course':'교사 담당 과목 지정',allocation:'교사별 담당 시수 입력'})[type],handlers[type],{...input.dataset});}
+document.addEventListener('change',event=>{const x=event.target,c=x.dataset.control;if(c==='new-course'){ui.newCourse=x.value;return;}if(c==='new-grade'){ui.grade=Number(x.value);return;}if(c==='group-parent'){chooseGroupParent(x.dataset.course,x.value);return;}if(c==='group-preview'){updateGroupPreview();return;}if(x.dataset.edit){const committed=committedFields.get(x);committedFields.delete(x);if(committed&&committed.value===x.value&&committed.checked===x.checked)return;const focused=document.activeElement===x,selector=controlSelector(x);if(!saveInput(x))repaintSheetPanel();if(focused&&selector)focusCell(selector,{select:false});}});
 document.addEventListener('input',event=>{if(event.target.dataset.control==='group-preview')updateGroupPreview();});
+// 일반 셀 입력은 현재 교과군만 복사·검사합니다. 다른 교과군의 로컬 입력은 그대로 둡니다.
+function mutateCell(label,fn,change){
+  if(!cloud.ready||cloud.saving||cloud.loading){toast('연결 또는 저장을 확인하세요.',true);return false;}
+  try{
+    const id=dept().id,p=C.clone(S.departmentPart(state,id)),local=stateFromParts(S.globalPart(state),[p.department],[p]);
+    fn(local);C.assertState(local);
+    const parts=state.departments.filter(d=>cloud.loaded.has(d.id)).map(d=>d.id===id?S.departmentPart(local,id):S.departmentPart(state,d.id));
+    state=stateFromParts(S.globalPart(state),state.departments,parts,[{at:new Date().toISOString(),action:label},...state.history].slice(0,200));
+    markDirty([id],false);queueCellPaint(change);return true;
+  }catch(err){toast(err.message,true);return false;}
+}
+let pendingCellPaint=[],panelPaintPending=false;
+function queueCellPaint(change){
+  if(!['allocation','teacher-name','teacher-lead'].includes(change.edit))panelPaintPending=true;
+  else pendingCellPaint.push({...change});
+  paintPending=true;if(!renderPause)flushInputPaint();
+}
+function paintSaveState(){
+  const save=document.querySelector('.header-save');if(save)save.textContent=cloud.dirty.has(dept().id)||cloud.globalDirty?'저장 전':'저장됨';
+  for(const d of state.departments){const dot=document.querySelector(`.sheet-tab[data-sheet="${d.id}"] .unsaved-dot`);if(dot)dot.hidden=!cloud.dirty.has(d.id);}
+}
+function repaintSheetPanel(){
+  const teacher=document.querySelector('.sheet-scroll'),plan=document.querySelector('.plan-scroll'),scroll={left:teacher?.scrollLeft||0,top:teacher?.scrollTop||0,planTop:plan?.scrollTop||0};
+  const main=document.querySelector('#main');if(!main||ui.view!=='sheet'){render();return;}
+  main.innerHTML=sheetView();applyFrameSize();alignHorizontalScroll(scroll.left);observeHorizontalFrames();
+  const next=document.querySelector('.sheet-scroll'),nextPlan=document.querySelector('.plan-scroll');if(next){next.scrollTop=scroll.top;next.scrollLeft=scroll.left;}if(nextPlan)nextPlan.scrollTop=scroll.planTop;
+  paintSaveState();applyHighlight();
+}
+function paintCellChanges(changes){
+  if(ui.view!=='sheet'){render();return;}
+  const model=gridModel();
+  for(const x of changes){
+    if(x.edit==='allocation'){
+      const g=model.slotGroups.get(x.section);if(!g)continue;
+      for(const input of document.querySelectorAll(`[data-edit="allocation"][data-section="${x.section}"]`)){
+        const own=model.assignment(input.dataset.teacher,x.section);input.value=own||'';
+        const cell=input.closest('td'),ready=ui.mode==='input'&&draft()&&!cloud.saving&&!cloud.loading&&model.canAllocate(input.dataset.teacher,g);
+        if(cell)cell.classList[ready?'add':'remove']('allocation-ready');
+      }
+      const total=document.querySelector(`[data-teacher-sum="${x.teacher}"]`);if(total)total.textContent=model.hours(x.teacher)||'';
+    }else{
+      const t=state.teachers.find(t=>t.id===x.id);if(!t)continue;
+      const name=document.querySelector(`[data-edit="teacher-name"][data-id="${t.id}"]`),lead=document.querySelector(`[data-edit="teacher-lead"][data-id="${t.id}"]`);
+      if(name)name.value=t.name;if(lead)lead.checked=Boolean(t.isLead);
+      const index=model.teachers.findIndex(t=>t.id===x.id),handle=document.querySelector(`[data-row-drag="teacher"][data-id="${t.id}"]`);
+      if(handle){handle.setAttribute('aria-label',C.teacherLabel(t,index)+' 순서 드래그');handle.setAttribute('title','드래그하여 순서 변경 · 키보드: Space, 방향키, Enter');}
+    }
+  }
+  paintSaveState();applyHighlight();
+}
+function flushInputPaint(){
+  if(!paintPending||renderPause)return;
+  const focused=controlSelector(document.activeElement),changes=pendingCellPaint;pendingCellPaint=[];paintPending=false;
+  if(panelPaintPending){panelPaintPending=false;repaintSheetPanel();}else if(changes.length)paintCellChanges(changes);else render();
+  if(focused)focusCell(focused,{select:false});
+}
+// 화면을 그릴 때 현재 교과군의 자료를 한 번만 모아 셀 조회에 재사용합니다.
+function gridModel(){
+  const orderedGroups=[],slotTeachers=new Map();
+  const id=dept().id,teachers=state.teachers.filter(t=>t.deptId===id),courses=state.courses.filter(c=>c.deptId===id),courseIds=new Set(courses.map(c=>c.id)),groups=new Map(courses.map(c=>[c.id,[]])),slotGroups=new Map(),assigned=new Map(),allocated=new Map(),totals=new Map(),assignedCourses=new Map(),unmapped=new Map(teachers.map(t=>[t.id,[]]));
+  for(const g of state.groups){if(!courseIds.has(g.courseId))continue;groups.get(g.courseId).push(g);orderedGroups.push(g);for(const s of g.slots)slotGroups.set(s.id,g);for(const a of g.legacy)totals.set(a.teacherId,(totals.get(a.teacherId)||0)+a.hours);}
+  for(const a of state.assignments){if(!slotGroups.has(a.sectionId))continue;assigned.set(a.teacherId+':'+a.sectionId,a.hours);if(!slotTeachers.has(a.sectionId))slotTeachers.set(a.sectionId,[]);slotTeachers.get(a.sectionId).push(a.teacherId);allocated.set(a.sectionId,(allocated.get(a.sectionId)||0)+a.hours);totals.set(a.teacherId,(totals.get(a.teacherId)||0)+a.hours);}
+  for(const a of state.unmapped){if(unmapped.has(a.teacherId)){unmapped.get(a.teacherId).push(a);totals.set(a.teacherId,(totals.get(a.teacherId)||0)+a.hours);}}
+  for(const g of orderedGroups){const tids=new Set([...g.legacy.map(a=>a.teacherId),...g.slots.flatMap(s=>slotTeachers.get(s.id)||[])]);for(const tid of tids){if(!assignedCourses.has(tid))assignedCourses.set(tid,[]);const ids=assignedCourses.get(tid);if(!ids.includes(g.courseId))ids.push(g.courseId);}}
+  return {teachers,courses,slotGroups,groups:id=>groups.get(id)||[],assignment:(tid,sid)=>assigned.get(tid+':'+sid)||0,hours:tid=>totals.get(tid)||0,unmapped:tid=>unmapped.get(tid)||[],
+    rows:t=>{const rows=(t.rows||[]).map(r=>({...r}));for(const cid of assignedCourses.get(t.id)||[])if(!rows.some(r=>r.courseId===cid))rows.push({id:`row-${t.id}-${cid}`,courseId:cid});return rows.length?rows:[{id:`row-${t.id}-blank`,courseId:''}];},
+    canAllocate:(tid,g)=>g.legacy.length?g.legacy.some(a=>a.teacherId===tid&&a.hours>0):g.slots.some(s=>assigned.has(tid+':'+s.id)||(allocated.get(s.id)||0)<s.hours)};
+}
+
 const GRID_CONTROL='input[data-edit="planned"],input[data-edit="allocation"],button[data-action="edit-group"],button[data-action="teacher-split"],button[data-action="resolve-pool"]';
 const FOCUSABLE_CONTROL='button,input,select,textarea,a[href],[tabindex]';
 const committedFields=new WeakMap();
@@ -1502,11 +1573,7 @@ function commitField(node){
   try{const ok=saveInput(node);if(ok)committedFields.set(node,{value:node.value,checked:node.checked});return ok;}
   finally{renderPause--;}
 }
-function flushInputPaint(){
-  if(!paintPending||renderPause)return;
-  const focused=controlSelector(document.activeElement);render();
-  if(focused)focusCell(focused,{select:false});
-}
+
 function clearHighlight(){cloud.context=null;applyHighlight();}
 function highlightControl(node){
   const x=node?.dataset;if(!x||!state){clearHighlight();return;}
@@ -1539,7 +1606,7 @@ document.addEventListener('keydown',event=>{
   // Let Tab leave the document at its natural boundary without trapping focus.
   if(!next&&event.key==='Tab'){if(!commitField(node))event.preventDefault();return;}
   event.preventDefault();if(!commitField(node))return;
-  if(paintPending)render();
+  if(paintPending)flushInputPaint();
   if(selector)focusCell(selector,{scroll:true});
   else{const current=controlSelector(node);if(current)focusCell(current,{select:false});}
 });
@@ -1556,25 +1623,25 @@ document.addEventListener('pointerdown',event=>{
 document.addEventListener('click',flushInputPaint);
 document.addEventListener('pointercancel',flushInputPaint);
 
-window.addEventListener('blur',()=>{const active=document.activeElement;if(active?.closest?.('.allocation-table')&&active.dataset.edit){commitField(active);active.blur();}if(paintPending)render();clearHighlight();});
-document.addEventListener('submit',event=>{if(event.target.id!=='school-form')return;event.preventDefault();const f=new FormData(event.target),value={name:String(f.get('name')).trim(),year:Number(f.get('year')),semester:Number(f.get('semester')),grades:[1,2,3].map(grade=>({grade,classCount:Number(f.get('class'+grade)),movingCount:Number(f.get('moving'+grade))}))};if(mutate('학교·학급 구성 변경',s=>{if(s.departments.some(d=>d.status!=='draft'))throw new Error('제출·확정된 시트의 입력을 다시 연 후 수정하세요.');C.validateSchool(s,value);s.school=value;}))saveGlobalOnly();});
-document.querySelector('#backup-file').addEventListener('change',async event=>{if(!cloud.admin){loginDialog();return;}const file=event.target.files[0];if(!file)return;try{if(file.size>5000000)throw new Error('파일이 너무 큽니다.');const next=C.assertState(C.upgradeState(JSON.parse(await file.text()),defaultNameHashes));confirmDialog('백업 복원','현재 작업본을 교체합니다. 교과군별 저장 버튼으로 반영합니다.',()=>{state=next;markDirty();render();});}catch(err){toast(err.message,true);}});
-function assertResetAdmin(){if(!cloud.admin||ui.mode!=='admin')throw new Error('관리자 모드에서 초기화하세요.');if(!cloud.ready||cloud.saving||ui.printing)throw new Error('연결·저장·인쇄 상태를 확인하세요.');}
+window.addEventListener('blur',()=>{const active=document.activeElement;if(active?.closest?.('.allocation-table')&&active.dataset.edit){commitField(active);active.blur();}if(paintPending)flushInputPaint();clearHighlight();});
+document.addEventListener('submit',async event=>{if(event.target.id!=='school-form')return;event.preventDefault();const f=new FormData(event.target),value={name:String(f.get('name')).trim(),year:Number(f.get('year')),semester:Number(f.get('semester')),grades:[1,2,3].map(grade=>({grade,classCount:Number(f.get('class'+grade)),movingCount:Number(f.get('moving'+grade))}))};try{await ensureAllDepartments({stableGlobal:true});if(mutate('학교·학급 구성 변경',s=>{if(s.departments.some(d=>d.status!=='draft'))throw new Error('제출·확정된 시트의 입력을 다시 연 후 수정하세요.');C.validateSchool(s,value);s.school=value;}))await saveGlobalOnly();}catch(err){toast(err.message,true);}});
+document.querySelector('#backup-file').addEventListener('change',async event=>{if(!cloud.admin){loginDialog();return;}const file=event.target.files[0];if(!file)return;try{if(file.size>5000000)throw new Error('파일이 너무 큽니다.');const next=C.assertState(C.upgradeState(JSON.parse(await file.text()),defaultNameHashes));await ensureAllDepartments();confirmDialog('백업 복원','현재 작업본을 교체합니다. 교과군별 저장 버튼으로 반영합니다.',()=>{state=next;cloud.loaded=new Set(next.departments.map(d=>d.id));markDirty();render();});}catch(err){toast(err.message,true);}});
+function assertResetAdmin(){if(!cloud.admin||ui.mode!=='admin')throw new Error('관리자 모드에서 초기화하세요.');if(!cloud.ready||cloud.saving||cloud.loading||ui.printing)throw new Error('연결·저장·인쇄 상태를 확인하세요.');}
 function resetDialog(){
   assertResetAdmin();cancelRowOrder();const deptId=dept().id,name=e(dept().name);
   showDialog('입력 자료 초기화',`<div class="reset-options">
     <label><input type="radio" name="reset-scope" value="hours" checked><span><strong>${name} 담당 시수만 초기화</strong><small>교사별 배정 시수와 미연결 원본 배정을 비웁니다. 교사명·담당 과목 행·부장 표시·개설 과목·분반은 유지합니다.</small></span></label>
     <label><input type="radio" name="reset-scope" value="department"><span><strong>${name} 과목·교사 전체 초기화</strong><small>현재 교과군의 개설 과목·분반·교사·배정 자료를 모두 비웁니다.</small></span></label>
     <label><input type="radio" name="reset-scope" value="all"><span><strong>전체 교과군 입력 자료 초기화</strong><small>모든 교과군의 개설 과목·분반·교사·배정 자료를 비웁니다.</small></span></label>
-    </div><p class="reset-note">학교 설정·교과군명·과목 선택 목록·비밀번호는 유지합니다. 대상 교과군은 ‘입력 중’으로 전환합니다.</p><p class="reset-note"><strong>초기화는 화면에 먼저 적용되며, 해당 교과군을 저장하면 서버에 반영됩니다.</strong> 저장 전에는 ‘불러오기’로 서버 저장본을 다시 가져올 수 있습니다.</p>`,f=>{
-    assertResetAdmin();const scope=String(f.get('reset-scope')||''),result=Reset.apply(state,scope,deptId);
+    </div><p class="reset-note">학교 설정·교과군명·과목 선택 목록·비밀번호는 유지합니다. 대상 교과군은 ‘입력 중’으로 전환합니다.</p><p class="reset-note"><strong>초기화는 화면에 먼저 적용되며, 해당 교과군을 저장하면 서버에 반영됩니다.</strong> 저장 전에는 ‘불러오기’로 서버 저장본을 다시 가져올 수 있습니다.</p>`,async f=>{
+    assertResetAdmin();const scope=String(f.get('reset-scope')||'');if(scope==='all')await ensureAllDepartments();assertResetAdmin();const result=Reset.apply(state,scope,deptId);
     if(mutate('입력 자료 초기화: '+({hours:'담당 시수',department:'현재 교과군',all:'전체 교과군'}[scope]||''),s=>Object.assign(s,result.state))){
       dialog.close();ui.resetDeptIds=result.departmentIds;ui.importedDeptIds=(ui.importedDeptIds||[]).filter(id=>!result.departmentIds.includes(id));ui.view='sheet';ui.deptId=deptId;cloud.context=null;render();toast('초기화했습니다. 변경한 교과군을 저장해 주세요.');
     }
   },'선택 범위 초기화');
 }
 
-function requireImportAdmin(){if(!cloud.ready||cloud.saving)throw new Error('연결 또는 저장을 확인하세요.');if(!cloud.admin||ui.mode!=='admin')throw new Error('관리자 모드에서 가져오세요.');}
+function requireImportAdmin(){if(!cloud.ready||cloud.saving||cloud.loading)throw new Error('연결 또는 저장을 확인하세요.');if(!cloud.admin||ui.mode!=='admin')throw new Error('관리자 모드에서 가져오세요.');}
 function hoursImportDialog(data,initial){
   requireImportAdmin();const options=initial||H.defaults(data,state);
   const body=`<p>분반배정 결과를 교과군별 개설 과목·이동 분반·필요 시수로 가져옵니다. 대상 학년과 교과군을 확인하세요.</p>
@@ -1600,22 +1667,111 @@ function hoursImportDialog(data,initial){
 }
 document.querySelector('#hours-import-file').addEventListener('change',async event=>{
   const file=event.target.files[0];if(!file)return;
-  try{requireImportAdmin();if(file.size>5000000)throw new Error('5MB 이하의 JSON 파일을 선택하세요.');const raw=JSON.parse((await file.text()).replace(/^\uFEFF/,''));hoursImportDialog(H.parse(raw));}
+  try{requireImportAdmin();if(file.size>5000000)throw new Error('5MB 이하의 JSON 파일을 선택하세요.');const raw=JSON.parse((await file.text()).replace(/^\uFEFF/,''));const data=H.parse(raw);await ensureAllDepartments();hoursImportDialog(data);}
   catch(err){toast(err instanceof SyntaxError?'JSON 파일 형식이 올바르지 않습니다.':err.message,true);}
   finally{event.target.value='';}
 });
 
 
 window.addEventListener('beforeunload',event=>{if(cloud.dirty.size||cloud.globalDirty){event.preventDefault();event.returnValue='';}});
+function emptyPart(department){return {department:{...department,sourceTotal:null,note:''},teachers:[],courses:[],groups:[],assignments:[],unmapped:[]};}
+function stateFromParts(global,departments,parts,history=[]){
+  const byId=new Map(parts.map(p=>[p.department.id,p]));
+  const ordered=departments.map(d=>byId.get(d.id)||emptyPart(d));
+  return {schemaVersion:1,uiVersion:3,school:global.school,source:global.source??{},customCatalog:global.customCatalog??[],departments:ordered.map(p=>p.department),teachers:ordered.flatMap(p=>p.teachers),courses:ordered.flatMap(p=>p.courses),groups:ordered.flatMap(p=>p.groups),assignments:ordered.flatMap(p=>p.assignments),unmapped:ordered.flatMap(p=>p.unmapped),history};
+}
+function adopt(result){
+  if(!result.partial){
+    const next=C.assertState(result.state);state=next;cloud.loaded=new Set(next.departments.map(d=>d.id));cloud.scoped=false;
+    cloud.base=Object.fromEntries(next.departments.map(d=>[d.id,C.clone(S.departmentPart(next,d.id))]));
+  }else{
+    const next=C.assertState(stateFromParts(result.global,result.departments,result.parts));state=next;cloud.scoped=true;
+    cloud.loaded=new Set(result.parts.map(p=>p.department.id));cloud.base=Object.fromEntries(result.parts.map(p=>[p.department.id,C.clone(p)]));
+    ui.deptId=result.selectedDepartmentId;
+  }
+  cloud.globalRevision=result.globalRevision;cloud.revisions={...result.revisions};cloud.globalBase=C.clone(S.globalPart(state));cloud.dirty.clear();cloud.globalDirty=false;cloud.ready=true;
+}
+function mergeWorkspace(result){
+  if(result.admin===false&&cloud.admin){cloud.admin=false;ui.mode='input';}
+  if(!result.partial){
+    result={partial:true,global:S.globalPart(result.state),departments:result.state.departments,parts:result.state.departments.map(d=>S.departmentPart(result.state,d.id)),globalRevision:result.globalRevision,revisions:result.revisions};
+  }
+  if(result.globalRevision!==cloud.globalRevision){
+    if(cloud.dirty.size||cloud.globalDirty)throw Object.assign(new Error('학교 설정이 변경되었습니다. 저장 전 내용을 보존했습니다. 변경 내용을 확인한 뒤 불러오기를 사용하세요.'),{code:'global_conflict',status:409});
+    adopt({...result,selectedDepartmentId:result.selectedDepartmentId||ui.deptId});return;
+  }
+  const parts=new Map(state.departments.filter(d=>cloud.loaded.has(d.id)).map(d=>[d.id,S.departmentPart(state,d.id)])),base={...cloud.base},revisions={...cloud.revisions},loaded=new Set(cloud.loaded);
+  for(const p of result.parts){
+    const id=p.department.id;if(cloud.dirty.has(id))continue;
+    parts.set(id,p);base[id]=C.clone(p);revisions[id]=result.revisions[id];loaded.add(id);
+  }
+  // 로컬에서 새로 만든 교과군과 아직 저장하지 않은 학교 설정을 함께 유지합니다.
+  const global=cloud.globalDirty?S.globalPart(state):result.global;
+  const departments=global.departmentIds.map(id=>parts.get(id)?.department||result.departments.find(d=>d.id===id)||state.departments.find(d=>d.id===id));
+  const next=C.assertState(stateFromParts(global,departments,[...parts.values()],state.history));
+  state=next;cloud.base=base;cloud.revisions=revisions;cloud.loaded=loaded;
+}
+async function initialize(){try{const r=await api('/workspace');adopt(r);render();}catch(err){app.innerHTML='<div class="loading"><h1>공동 작업본 연결 실패</h1><p>'+e(err.message)+'</p>'+btn('refresh','다시 연결')+'</div>';}}
+async function selectDept(id){
+  if(cloud.saving||cloud.fullLoading||ui.printing)return;
+  if(!state.departments.some(d=>d.id===id))return;
+  const ticket=++cloud.loadTicket;
+  if(cloud.loaded.has(id)){
+    cloud.loading=false;ui.deptId=id;ui.newCourse='';cloud.context=null;ui.catalogGroup=R.suggestedGroup(dept().name);render();return;
+  }
+  cloud.loading=true;render();
+  try{
+    const result=await api('/workspace','GET',{departmentId:id});
+    if(ticket!==cloud.loadTicket)return;
+    mergeWorkspace(result);ui.deptId=id;ui.newCourse='';cloud.context=null;ui.catalogGroup=R.suggestedGroup(dept().name);
+  }catch(err){if(ticket===cloud.loadTicket)toast(err.message,true);}
+  finally{if(ticket===cloud.loadTicket){cloud.loading=false;render();}}
+}
+async function ensureAllDepartments({stableGlobal=false}={}){
+  if(state.departments.every(d=>cloud.loaded.has(d.id)))return;
+  if(cloud.loading||cloud.saving||cloud.fullLoading)throw new Error('자료 조회 또는 저장이 끝난 뒤 다시 실행하세요.');
+  cloud.fullLoading=true;cloud.loading=true;cloud.loadTicket++;render();
+  try{const result=await api('/workspace','GET',{all:true,departmentId:dept().id});if(stableGlobal&&result.globalRevision!==cloud.globalRevision)throw new Error('학교 설정이 다른 곳에서 변경되었습니다. 변경 내용을 확인한 뒤 다시 입력하세요.');mergeWorkspace(result);}
+  finally{cloud.fullLoading=false;cloud.loading=false;render();}
+}
+function markDirty(ids=null,includeGlobal=true){
+  if(includeGlobal)cloud.globalDirty=!S.same(S.globalPart(state),cloud.globalBase);
+  for(const id of ids||cloud.loaded){
+    if(!state.departments.some(d=>d.id===id)){cloud.dirty.delete(id);continue;}
+    if(S.same(S.departmentPart(state,id),cloud.base[id]))cloud.dirty.delete(id);else cloud.dirty.add(id);
+  }
+}
+async function saveGlobal(){
+  if(!cloud.globalDirty)return;
+  if(!cloud.admin)throw new Error('관리자 모드에서 학교 설정을 저장하세요.');
+  const g=C.clone(S.globalPart(state)),added=g.departmentIds.filter(id=>!cloud.globalBase.departmentIds.includes(id)).map(id=>C.clone(S.departmentPart(state,id)));
+  const r=await api('/global','PUT',{revision:cloud.globalRevision,global:g,newSheets:added});
+  cloud.globalRevision=r.globalRevision;cloud.globalBase=g;Object.assign(cloud.revisions,r.newRevisions);
+  for(const p of added){cloud.base[p.department.id]=p;cloud.loaded.add(p.department.id);}markDirty(null,true);
+}
+async function saveSheet(id){
+  if(cloud.saving||cloud.loading||!cloud.loaded.has(id))return;
+  cloud.saving=true;render();
+  try{await saveGlobal();const p=C.clone(S.departmentPart(state,id));if(!cloud.dirty.has(id)){toast('저장되었습니다.');return;}
+    const r=await api('/sheets/'+encodeURIComponent(id),'PUT',{part:p,revision:cloud.revisions[id],globalRevision:cloud.globalRevision,operationId:C.uid('save')});
+    cloud.revisions[id]=r.revision;cloud.base[id]=p;markDirty([id],false);toast(p.department.name+' 저장 완료');
+  }catch(err){if(err.status===403){cloud.admin=false;ui.mode='input';}toast(err.message,true);}finally{cloud.saving=false;render();}
+}
+function refreshServer(){
+  if(cloud.saving||cloud.loading||ui.printing)return;
+  const load=async()=>{cloud.loading=true;cloud.loadTicket++;render();try{adopt(await api('/workspace','GET',{departmentId:dept().id}));render();toast('불러왔습니다.');}catch(err){toast(err.message,true);}finally{cloud.loading=false;render();}};
+  if(cloud.dirty.size||cloud.globalDirty)confirmDialog('최신 내용 불러오기','저장 전 변경을 버리고 서버 내용을 불러옵니다.',()=>{load();});else if(!cloud.ready)initialize();else load();
+}
+
 await initialize();
 
 async function api(path,method='GET',data){try{return await gasTransport.request(path,method,data);}catch(err){if(err.code==='admin_required'){cloud.admin=false;ui.mode='input';if(cloud.ready){render();toast(err.message,true);}}throw err;}}
-function adopt(result){state=C.assertState(result.state);cloud.globalRevision=result.globalRevision;cloud.revisions=result.revisions;cloud.globalBase=C.clone(S.globalPart(state));cloud.base=Object.fromEntries(state.departments.map(d=>[d.id,C.clone(S.departmentPart(state,d.id))]));cloud.dirty.clear();cloud.globalDirty=false;cloud.ready=true;}
-async function initialize(){try{let r=await api('/state');if(r.needsInitialize)r=await api('/bootstrap','POST',{});adopt(r);render();}catch(err){app.innerHTML='<div class="loading"><h1>공동 작업본 연결 실패</h1><p>'+e(err.message)+'</p>'+btn('refresh','다시 연결')+'</div>';}}
-async function saveGlobal(){if(!cloud.globalDirty)return;if(!cloud.admin)throw new Error('관리자 모드에서 학교 설정을 저장하세요.');const g=C.clone(S.globalPart(state)),added=g.departmentIds.filter(id=>!Object.hasOwn(cloud.base,id)).map(id=>C.clone(S.departmentPart(state,id)));const r=await api('/global','PUT',{revision:cloud.globalRevision,global:g,newSheets:added});cloud.globalRevision=r.globalRevision;cloud.globalBase=g;Object.assign(cloud.revisions,r.newRevisions);for(const p of added)cloud.base[p.department.id]=p;markDirty();}
-async function saveSheet(id){if(cloud.saving)return;cloud.saving=true;render();try{await saveGlobal();const p=C.clone(S.departmentPart(state,id));if(!cloud.dirty.has(id)){toast('저장되었습니다.');return;}const r=await api('/sheets/'+encodeURIComponent(id),'PUT',{part:p,revision:cloud.revisions[id],globalRevision:cloud.globalRevision,operationId:C.uid('save')});cloud.revisions[id]=r.revision;cloud.base[id]=p;markDirty();toast(p.department.name+' 저장 완료');}catch(err){if(err.status===403){cloud.admin=false;ui.mode='input';}toast(err.message,true);}finally{cloud.saving=false;render();}}
-async function saveGlobalOnly(){if(cloud.saving)return;cloud.saving=true;render();try{await saveGlobal();toast('학교 설정 저장 완료');}catch(err){toast(err.message,true);}finally{cloud.saving=false;render();}}
-function refreshServer(){const load=async()=>{try{adopt(await api('/state'));render();toast('불러왔습니다.');}catch(err){toast(err.message,true);}};if(cloud.dirty.size||cloud.globalDirty)confirmDialog('최신 내용 불러오기','저장 전 변경을 버리고 서버 내용을 불러옵니다.',()=>{load();});else if(!cloud.ready)initialize();else load();}
+
+
+
+
+async function saveGlobalOnly(){if(cloud.saving||cloud.loading)return;cloud.saving=true;render();try{await saveGlobal();toast('학교 설정 저장 완료');}catch(err){toast(err.message,true);}finally{cloud.saving=false;render();}}
+
 function loginDialog(){showDialog('관리자 모드','<label class="field">비밀번호<input name="password" type="password" autocomplete="current-password" required maxlength="128"></label>',async f=>{await api('/auth/login','POST',{password:String(f.get('password'))});cloud.admin=true;ui.mode='admin';ui.view='sheet';dialog.close();render();},'진입');}
 async function logoutAdmin(){try{await api('/auth/logout','POST',{});cloud.admin=false;ui.mode='input';ui.view='sheet';render();}catch(err){toast(err.message,true);}}
 function accessPasswordDialog(){
@@ -1695,9 +1851,9 @@ document.addEventListener('dblclick',event=>{if(event.target.closest?.('[data-re
 window.addEventListener('resize',()=>{applyFrameSize();alignHorizontalScroll();applyHighlight();});
 
 async function printBlankForm(){
-  if(ui.printing||!cloud.ready)return;
+  if(ui.printing||!cloud.ready||cloud.loading||cloud.saving)return;
   const deptId=dept().id;ui.printing=true;render();
-  try{const latest=await api('/state');if(!latest.state)throw new Error('서버 작업본을 확인하세요.');const printState=C.assertState(latest.state);document.querySelector('#print-root').innerHTML=P.blankFormSvg(printState,deptId);await document.fonts?.ready;window.print();}
+  try{const latest=await api('/workspace','GET',{departmentId:deptId});const printState=C.assertState(latest.partial?stateFromParts(latest.global,latest.parts.map(p=>p.department),latest.parts):latest.state);document.querySelector('#print-root').innerHTML=P.blankFormSvg(printState,deptId);await document.fonts?.ready;window.print();}
   catch(err){toast(err.message,true);}finally{ui.printing=false;render();}
 }
 
@@ -1707,7 +1863,7 @@ function currentPrintSnapshot(){
   flushInputPaint();return C.assertState(C.clone(state));
 }
 async function printCurrentForm(){
-  if(ui.printing||!cloud.ready||cloud.saving)return;
+  if(ui.printing||!cloud.ready||cloud.saving||cloud.loading)return;
   if(ui.printCommitFailed){ui.printCommitFailed=false;toast('입력값을 확인한 뒤 인쇄하세요.',true);return;}
   let snapshot,deptId,unsaved;
   try{snapshot=currentPrintSnapshot();deptId=dept().id;unsaved=cloud.globalDirty||cloud.dirty.has(deptId);}
@@ -1717,7 +1873,7 @@ async function printCurrentForm(){
   catch(err){toast(err.message,true);}finally{ui.printing=false;render();}
 }
 window.addEventListener('beforeprint',()=>{
-  if(ui.printing||!cloud.ready)return;
+  if(ui.printing||!cloud.ready||cloud.loading||cloud.saving)return;
   try{const snapshot=currentPrintSnapshot();document.querySelector('#print-root').innerHTML=P.currentFormSvg(snapshot,dept().id,cloud.globalDirty||cloud.dirty.has(dept().id));}
   catch(err){document.querySelector('#print-root').innerHTML='<p>입력값을 확인한 뒤 인쇄하세요.</p>';toast(err.message,true);}
 });
