@@ -5,8 +5,8 @@
   "compatibility_date": "2026-07-30",
   "d1_databases": [{
     "binding": "DB",
-    "database_name": "allocation-test",
-    "database_id": "00000000-0000-0000-0000-000000000000",
+    "database_name": "216a677e-9ae1-461d-b451-da63aa27f54a",
+    "database_id": "216a677e-9ae1-461d-b451-da63aa27f54a",
     "migrations_dir": "migrations"
   }],
   "env": {
