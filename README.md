@@ -77,3 +77,4 @@ dist/                      정적 배포 파일만 생성하는 출력 디렉터
 기존 화면의 CSS는 원본과 해시를 비교하는 회귀 시험으로 보호합니다.
 정적 출력에는 server/, migrations/, tests/, .dev.vars가 포함되지 않습니다.
 루트 `.nojekyll`은 기존 저장소의 파일이며 Cloudflare 빌드에서는 사용하지 않습니다.
+ 
