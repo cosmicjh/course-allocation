@@ -1,4 +1,2 @@
-// Apps Script의 '배포 → 새 배포 → 웹 앱'에서 받은 /exec 주소를 입력하세요.
-window.ALLOCATION_CONFIG = {
-  webAppUrl: 'https://script.google.com/macros/s/AKfycbwZNogKp2KzOaPIsjVXlFsUdFLEtlK4mKp0UOrAUKVUcqP58lPPaw0Z7I1QjVM8Kin2/exec'
-};
+// 공개 클라이언트 설정. 비밀번호와 서버 비밀값은 이 파일에 넣지 않습니다.
+window.ALLOCATION_CONFIG = { apiBase: "/api", appId: "course-allocation-cloudflare" };

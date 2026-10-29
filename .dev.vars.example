@@ -1,0 +1,6 @@
+# Copy to .dev.vars for a private local setup, or use pnpm setup:local for virtual data.
+# Generate a random pepper with: pnpm password:hash --generate-pepper
+PASSWORD_PEPPER="REPLACE_WITH_RANDOM_64_HEX_CHARACTERS"
+# Provision with the SAME pepper. Use --admin when generating the administrator hash.
+BOOTSTRAP_ACCESS_HASH="REPLACE_WITH_ACCESS_CREDENTIAL_HASH"
+BOOTSTRAP_ADMIN_HASH="REPLACE_WITH_ADMIN_CREDENTIAL_HASH"

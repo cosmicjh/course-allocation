@@ -1,0 +1,35 @@
+name: Cloudflare migration tests
+on:
+  push:
+    branches: [cloudflare-test, 'codex/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  virtual-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.25.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm setup:local
+      - run: pnpm test:all
+      - run: pnpm benchmark
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: virtual-test-results
+          path: test-results/
+          retention-days: 7

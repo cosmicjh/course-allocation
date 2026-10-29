@@ -1,0 +1,13 @@
+import {mkdir,copyFile,cp,writeFile,readFile} from 'node:fs/promises';
+import {build} from 'esbuild';
+await mkdir('dist/shared',{recursive:true});
+for(const file of ['index.html','config.js'])await copyFile(file,'dist/'+file);
+await cp('shared','dist/shared',{recursive:true});
+await writeFile('dist/_routes.json',JSON.stringify({version:1,include:['/api/*'],exclude:[]},null,2));
+await writeFile('dist/_headers','/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: same-origin\n  X-Frame-Options: DENY\n  Cache-Control: no-cache\n');
+const html=await readFile('index.html','utf8');
+const runtime=html.match(/<script id="workbook-runtime">([\s\S]*?)<\/script>/)?.[1];
+if(!runtime)throw new Error('앱 런타임을 찾을 수 없습니다.');
+new Function(runtime);
+await build({entryPoints:['functions/api/[[path]].js'],bundle:true,format:'esm',platform:'browser',write:false});
+console.log('정적 파일과 Functions 번들 검증 완료: dist/');

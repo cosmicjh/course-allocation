@@ -1,0 +1,44 @@
+{
+  "format": "school-course-hours",
+  "schemaVersion": 1,
+  "hoursUnit": "weekly-periods",
+  "includesStudentData": false,
+  "exportedAt": "2026-10-29T00:00:00Z",
+  "source": {
+    "toolVersion": "19"
+  },
+  "sheets": [
+    {
+      "sheetId": "virtual-sheet",
+      "sourceSheetName": "가상배정",
+      "grade": 2,
+      "academicYear": 2026,
+      "semester": 1,
+      "validation": {
+        "complete": true,
+        "hardConstraintsPassed": true,
+        "coupledCohortsPassed": true
+      },
+      "courses": [
+        {
+          "courseId": "virtual-course",
+          "courseName": "가상추가 과목",
+          "subjectGroup": "korean",
+          "credits": 3,
+          "weeklyHours": 3,
+          "sectionCount": 1,
+          "totalWeeklyHours": 3,
+          "sections": [
+            {
+              "sectionId": "virtual-section",
+              "sectionCode": "A",
+              "timeBlock": "A",
+              "weeklyHours": 3
+            }
+          ]
+        }
+      ],
+      "coupledCohorts": []
+    }
+  ]
+}

@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "uiVersion": 3,
+  "school": {
+    "name": "가상고등학교",
+    "year": 2026,
+    "semester": 1,
+    "grades": [
+      {
+        "grade": 1,
+        "classCount": 2,
+        "movingCount": 2
+      },
+      {
+        "grade": 2,
+        "classCount": 2,
+        "movingCount": 2
+      },
+      {
+        "grade": 3,
+        "classCount": 2,
+        "movingCount": 2
+      }
+    ]
+  },
+  "source": {
+    "fixture": true
+  },
+  "customCatalog": [],
+  "departments": [
+    {
+      "id": "d1",
+      "name": "가상국어",
+      "status": "draft",
+      "sourceTotal": null,
+      "note": ""
+    },
+    {
+      "id": "d2",
+      "name": "가상수학",
+      "status": "draft",
+      "sourceTotal": null,
+      "note": ""
+    }
+  ],
+  "teachers": [
+    {
+      "id": "teacher-d1",
+      "deptId": "d1",
+      "name": "가상교사1",
+      "targetHours": null,
+      "sourceTotal": null,
+      "isLead": false,
+      "rows": [
+        {
+          "id": "row-d1",
+          "courseId": "course-d1"
+        }
+      ]
+    },
+    {
+      "id": "teacher-d2",
+      "deptId": "d2",
+      "name": "가상교사2",
+      "targetHours": null,
+      "sourceTotal": null,
+      "isLead": false,
+      "rows": [
+        {
+          "id": "row-d2",
+          "courseId": "course-d2"
+        }
+      ]
+    }
+  ],
+  "courses": [
+    {
+      "id": "course-d1",
+      "deptId": "d1",
+      "name": "가상국어 과목",
+      "grade": 2,
+      "baseHours": 3,
+      "credits": 3,
+      "kind": "subject"
+    },
+    {
+      "id": "course-d2",
+      "deptId": "d2",
+      "name": "가상수학 과목",
+      "grade": 2,
+      "baseHours": 3,
+      "credits": 3,
+      "kind": "subject"
+    }
+  ],
+  "groups": [
+    {
+      "id": "group-d1",
+      "courseId": "course-d1",
+      "label": "2A",
+      "kind": "moving",
+      "legacy": [],
+      "slots": [
+        {
+          "id": "section-d1",
+          "label": "2A",
+          "hours": 3
+        }
+      ],
+      "review": false,
+      "sourceHours": null,
+      "sourceCell": null
+    },
+    {
+      "id": "group-d2",
+      "courseId": "course-d2",
+      "label": "2A",
+      "kind": "moving",
+      "legacy": [],
+      "slots": [
+        {
+          "id": "section-d2",
+          "label": "2A",
+          "hours": 3
+        }
+      ],
+      "review": false,
+      "sourceHours": null,
+      "sourceCell": null
+    }
+  ],
+  "assignments": [
+    {
+      "sectionId": "section-d1",
+      "teacherId": "teacher-d1",
+      "hours": 3
+    },
+    {
+      "sectionId": "section-d2",
+      "teacherId": "teacher-d2",
+      "hours": 3
+    }
+  ],
+  "unmapped": [],
+  "history": []
+}

@@ -1,0 +1,28 @@
+{
+  "name": "course-allocation-cloudflare",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs && wrangler pages dev dist",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node tests/browser.mjs",
+    "test:pages": "node tests/pages-smoke.mjs",
+    "test:all": "node --test tests/*.test.mjs && node tests/browser.mjs && node tests/pages-smoke.mjs",
+    "benchmark": "node scripts/benchmark.mjs",
+    "setup:local": "node scripts/setup-local.mjs",
+    "password:hash": "node scripts/password-hash.mjs",
+    "db:migrate:local": "wrangler d1 migrations apply allocation-test --local",
+    "db:seed:local": "wrangler d1 execute allocation-test --local --file tests/fixtures/demo.sql"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "miniflare": "^4.20260730.0",
+    "playwright": "^1.64.1",
+    "wrangler": "^4.154.0"
+  }
+}
