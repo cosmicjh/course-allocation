@@ -4,8 +4,8 @@ import '../scripts/build.mjs';
 await mkdir('test-results',{recursive:true});
 const persist='test-results/pages-d1-'+crypto.randomUUID();
 const commands=[['pages','functions','build','functions','--outdir','test-results/pages-functions','--compatibility-date','2026-07-30'],
-  ['d1','migrations','apply','allocation-test','--local','--persist-to',persist],
-  ['d1','execute','allocation-test','--local','--persist-to',persist,'--file','tests/fixtures/demo.sql']];
+  ['d1','migrations','apply','DB','--local','--persist-to',persist],
+  ['d1','execute','DB','--local','--persist-to',persist,'--file','tests/fixtures/demo.sql']];
 const results=[];
 for(const args of commands){
   const child=spawn(process.execPath,['node_modules/wrangler/bin/wrangler.js',...args],{env:{...process.env,CI:'true',WRANGLER_SEND_METRICS:'false'},stdio:['ignore','pipe','pipe']});

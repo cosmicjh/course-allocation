@@ -69,6 +69,12 @@ test('new department creation and global metadata commit together',async()=>{
   assert.equal((await h.api('/global','PUT',data,admin)).status,200);
   const current=await h.api('/workspace?departmentId=d3','GET',undefined,input);assert.equal(current.data.parts[0].department.name,'가상신규');
 });
+test('aggregate global validation rejects invalid new department references atomically',async()=>{
+  const w=(await h.api('/workspace?all=true','GET',undefined,admin)).data;
+  const part={department:{id:'virtual-invalid',name:'가상검증',status:'draft',sourceTotal:null,note:''},teachers:[{id:'virtual-invalid-teacher',deptId:'missing-department',name:'가상검증교사',targetHours:null}],courses:[],groups:[],assignments:[],unmapped:[]};
+  const result=await h.api('/global','PUT',{revision:w.globalRevision,global:{...w.global,departmentIds:[...w.global.departmentIds,part.department.id]},newSheets:[part],operationId:op()},admin);
+  assert.equal(result.status,400);const after=(await h.api('/workspace?all=true','GET',undefined,admin)).data;assert.equal(after.globalRevision,w.globalRevision);assert.equal(after.parts.length,w.parts.length);
+});
 test('competing global creations never leave an orphan department',async()=>{
   const w=(await h.api('/workspace?all=true','GET',undefined,admin)).data;
   const make=id=>({revision:w.globalRevision,operationId:op(),global:{...w.global,departmentIds:[...w.global.departmentIds,id]},newSheets:[{department:{id,name:'가상경합'+id,status:'draft',sourceTotal:null,note:''},teachers:[],courses:[],groups:[],assignments:[],unmapped:[]}]});

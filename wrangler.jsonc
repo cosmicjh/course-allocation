@@ -3,20 +3,24 @@
   "name": "course-allocation-test",
   "pages_build_output_dir": "./dist",
   "compatibility_date": "2026-07-30",
-  "d1_databases": [{
-    "binding": "DB",
-    "database_name": "course-allocation-test-db",
-    "database_id": "216a677e-9ae1-461d-b451-da63aa27f54a",
-    "migrations_dir": "migrations"
-  }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "course-allocation-test-db",
+      "database_id": "216a677e-9ae1-461d-b451-da63aa27f54a",
+      "migrations_dir": "migrations"
+    }
+  ],
   "env": {
     "preview": {
-      "d1_databases": [{
-        "binding": "DB",
-        "database_name": "allocation-preview",
-        "database_id": "00000000-0000-0000-0000-000000000001",
-        "migrations_dir": "migrations"
-      }]
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "course-allocation-preview-db",
+          "database_id": "aa9efd75-e49a-49aa-bd83-d5b52a7e7273",
+          "migrations_dir": "migrations"
+        }
+      ]
     }
   }
 }

@@ -122,7 +122,9 @@ async function saveGlobal(s,data,session,now) {
   const added=data.newSheets;
   if(new Set(added.map(p=>p?.department?.id)).size!==added.length || added.some(p=>!p?.department?.id || parts.has(p.department.id) || !data.global.departmentIds.includes(p.department.id)))
     fail(400,'invalid_global','새 교과군 목록을 확인하세요.');
-  for(const part of added){validatePart(data.global,part,part.department.id);parts.set(part.department.id,part);}
+  // validateGlobal below checks every reference, duplicate and hours invariant together.
+  // Avoid repeating the same expensive checks for each new department first.
+  for(const part of added){boundedJson(part,'교과군 자료');parts.set(part.department.id,part);}
   const ordered=data.global.departmentIds.map(id=>parts.get(id));
   validateGlobal(data.global,ordered);
   if(!S.same(oldGlobal.school,data.global.school) && rows.some(r=>JSON.parse(r.payload).department.status!=='draft'))
