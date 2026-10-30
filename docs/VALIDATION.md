@@ -44,8 +44,8 @@ D1은 SQL 동작을 흉내 낸 객체가 아니라 Miniflare/workerd의 실제 S
 Wrangler의 Pages Functions 빌드, 별도 로컬 DB의 migration 적용,
 동일 DB의 가상 SQL 자료 적재를 확인했습니다. 원격 Cloudflare 리소스는 사용하지 않았습니다.
 
-GitHub Actions에도 동일한 시험과 벤치마크 실행을 추가했습니다. 워크플로는 파일로 준비했으며
-원격 push/GitHub Actions 실행은 하지 않았습니다. Actions는 배포·Cloudflare Secret을 요구하지 않습니다.
+GitHub Actions는 main push와 PR에서 동일한 로컬 시험을 실행합니다.
+Actions는 배포·Cloudflare Secret을 요구하지 않으며 운영 D1을 사용하지 않습니다.
 
 ## 성능 측정
 
@@ -67,5 +67,7 @@ window.ALLOCATION_PERFORMANCE.snapshot()으로 최근 100개 측정값을 볼 �
 위 로컬 시험 자체는 원격 D1 지연·무료 CPU 제한 집행을 포함하지 않습니다.
 2026-10-30에 별도 원격 시험을 추가했으며, 실제 수치와 한계는
 [원격 배포 보고서](CLOUDFLARE_DEPLOYMENT_2026-10-30.md)에 기록했습니다.
+해당 시험 프로젝트·DB와 일회성 원격 시험 스크립트는 main 전환 때 정리합니다.
+상시 회귀 검증은 위 로컬 자동 테스트로 유지합니다.
 로컬 API 시간과 원격 네트워크 시간은 wall time이며 Cloudflare CPU time과 다릅니다.
 기존 운영 데이터와 그 서버 내부 소스는 시험하거나 이전하지 않았습니다.

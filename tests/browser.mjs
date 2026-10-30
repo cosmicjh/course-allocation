@@ -2,16 +2,14 @@ import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {createHarness} from './harness.mjs';
-import {createRemoteHarness} from './remote-harness.mjs';
 import {hoursFixture} from './fixtures/demo.js';
 import '../scripts/build.mjs';
 
 await mkdir('test-results',{recursive:true});
-const remote=process.env.ALLOCATION_REMOTE_TEST==='1';
-const artifactDirectory=remote?'test-results/cloudflare':'test-results';await mkdir(artifactDirectory,{recursive:true});
-const h=remote?await createRemoteHarness():await createHarness();let browser;
-const testAccess=h.passwords?.access??'virtual-access-2026',testAdmin=h.passwords?.admin??'virtual-admin-2026';
-const revision=async()=>h.remote?await h.revision('d1'):(await h.db.prepare('SELECT revision FROM sheets WHERE id=\'d1\'').first()).revision;
+const artifactDirectory='test-results';
+const h=await createHarness();let browser;
+const testAccess='virtual-access-2026',testAdmin='virtual-admin-2026';
+const revision=async()=>(await h.db.prepare('SELECT revision FROM sheets WHERE id=\'d1\'').first()).revision;
 const steps=[],errors=[];
 async function step(name,fn){const start=performance.now();await fn();steps.push({name,ms:Math.round(performance.now()-start)});console.log('PASS '+name);}
 try{
@@ -19,7 +17,7 @@ try{
   browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHANNEL?{channel:process.env.PLAYWRIGHT_CHANNEL}:process.platform==='win32'?{channel:'msedge'}:{})});
   const context=await browser.newContext({viewport:{width:1440,height:1000}}),page=await context.newPage();
   page.on('pageerror',error=>errors.push(error.message));
-  const allowedRequest=request=>new URL(request.url()).origin===url||(remote&&new URL(request.url()).origin==='https://cdn.jsdelivr.net'&&['font','stylesheet'].includes(request.resourceType()));
+  const allowedRequest=request=>new URL(request.url()).origin===url;
   await context.route('**/*',route=>allowedRequest(route.request())?route.continue():route.abort());
   const button=action=>page.locator('[data-action="'+action+'"]');
   const submit=label=>page.locator('#dialog button[type=submit]').filter({hasText:label}).click();
@@ -75,7 +73,7 @@ try{
   assert.ok(performanceReport.samples.some(s=>s.action==='load'));assert.ok(performanceReport.samples.some(s=>s.action==='save'));assert.deepEqual(errors,[]);
   assert.doesNotMatch(JSON.stringify(performanceReport),/virtual-access-2026|virtual-admin-2026|가상복원교사|Bearer/);
   assert.equal(JSON.stringify(performanceReport).includes(testAccess),false);assert.equal(JSON.stringify(performanceReport).includes(testAdmin),false);
-  const report={environment:remote?'Cloudflare Pages + remote D1 + headless Edge; synthetic data only':'local Miniflare + headless Chromium; synthetic data only',...(remote?{baseUrl:url,deploymentId:h.m.deploymentId}:{}),steps,errors,performance:performanceReport};
-  await writeFile('test-results/browser.json',JSON.stringify(report,null,2)+'\n');if(remote)await h.writeReport('browser.json',report);
+  const report={environment:'local Miniflare + headless Chromium; synthetic data only',steps,errors,performance:performanceReport};
+  await writeFile('test-results/browser.json',JSON.stringify(report,null,2)+'\n');
   console.log(`브라우저 시험 ${steps.length}개 통과`);
 }finally{await browser?.close();await h.close();}

@@ -1,25 +1,27 @@
-# 교과 시수배당 · Cloudflare 시험 버전
+# 교과 시수배당
 
 기존 HTML 디자인, 교과군별 배당, 실제 하위 분반, 검증·제출·확정, 관리자 설정,
 JSON 가져오기·백업·복원, CSV, 인쇄를 유지한 Pages + Functions + D1 구현입니다.
 브라우저와 서버는 동일한 업무 검증 모듈을 사용합니다. 실행 코드에서 기존 외부 서버와
 스프레드시트 연결을 제거했습니다.
 
-개발 브랜치: **cloudflare-test**. 기존 운영 데이터와 main은 변경하지 않았습니다.
-기존 서버를 호출하거나 자료를 자동으로 복사하는 코드는 없습니다.
+운영 브랜치: **main**. 운영 주소: https://course-allocation.pages.dev
+Cloudflare Pages + Functions + D1으로 동작하며 기존 외부 서버를 호출하거나
+스프레드시트 자료를 자동으로 복사하는 코드는 없습니다.
 
 ## 문서
 
 - [기존 구조와 전환 계획](docs/MIGRATION_PLAN.md)
 - [구현 구조·저장·인증 계약](docs/ARCHITECTURE.md)
-- [Cloudflare 시험 배포 절차와 무료 한도](docs/CLOUDFLARE_SETUP.md)
+- [Cloudflare 운영 설정과 무료 한도](docs/CLOUDFLARE_SETUP.md)
+- [main 전환·시험 자원 정리 기록](docs/MAIN_RELEASE_2026-10-30.md)
 - [검증 범위와 성능 측정 방법](docs/VALIDATION.md)
 - [최종 로컬 시험 결과](docs/TEST_RESULTS.md)
 - [실제 Cloudflare 시험 배포·검증 결과](docs/CLOUDFLARE_DEPLOYMENT_2026-10-30.md)
 
-실제 시험 주소: https://course-allocation-test.pages.dev
-시험용 로그인 정보는 Git에서 제외한 `.cache/cloudflare-test/LOGIN.local.md`에 보관합니다.
-기존 `course-allocation` Pages 프로젝트 및 main은 그대로 유지합니다.
+운영 초기 로그인 정보는 Git에서 제외한 `.cache/cloudflare-production/LOGIN.local.md`에 보관합니다.
+운영 DB는 `course-allocation-db`이며 가상 교사·과목 자료를 넣지 않습니다.
+과거 시험 배포 보고서는 당시 검증 기록입니다. 시험 프로젝트·DB·브랜치는 운영 전환 후 정리합니다.
 
 ## 로컬 시작
 
@@ -81,5 +83,4 @@ dist/                      정적 배포 파일만 생성하는 출력 디렉터
 
 기존 화면의 CSS는 원본과 해시를 비교하는 회귀 시험으로 보호합니다.
 정적 출력에는 server/, migrations/, tests/, .dev.vars가 포함되지 않습니다.
-루트 `.nojekyll`은 기존 저장소의 파일이며 Cloudflare 빌드에서는 사용하지 않습니다.
- 
+로컬 가상 자료·자동 테스트는 운영 DB와 연결되지 않습니다.

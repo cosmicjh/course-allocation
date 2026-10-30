@@ -1,7 +1,7 @@
-name: Cloudflare migration tests
+name: Application tests
 on:
   push:
-    branches: [cloudflare-test, 'codex/**']
+    branches: [main, 'codex/**']
   pull_request:
   workflow_dispatch:
 permissions:
