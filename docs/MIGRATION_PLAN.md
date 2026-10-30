@@ -1,5 +1,7 @@
 # Cloudflare 전환 분석 및 개발 계획
 
+최초 분석·계획의 보존 기록입니다. 현재 구성과 완료 내역은 [main 전환 기록](MAIN_RELEASE_2026-10-30.md)을 확인하세요.
+
 작성일: 2026-10-29. 개발 브랜치: `cloudflare-test`.
 분석 시작 시 HEAD와 main: `e095b102c2d98c05d73cfbcfc41901ca2a9806b7`.
 

@@ -21,7 +21,7 @@ Cloudflare Pages + Functions + D1으로 동작하며 기존 외부 서버를 호
 
 운영 초기 로그인 정보는 Git에서 제외한 `.cache/cloudflare-production/LOGIN.local.md`에 보관합니다.
 운영 DB는 `course-allocation-db`이며 가상 교사·과목 자료를 넣지 않습니다.
-과거 시험 배포 보고서는 당시 검증 기록입니다. 시험 프로젝트·DB·브랜치는 운영 전환 후 정리합니다.
+과거 시험 배포 보고서는 당시 검증 기록입니다. 시험 프로젝트·DB·브랜치는 운영 전환 후 삭제했습니다.
 
 ## 로컬 시작
 
