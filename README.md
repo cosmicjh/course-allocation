@@ -15,6 +15,11 @@ JSON 가져오기·백업·복원, CSV, 인쇄를 유지한 Pages + Functions + 
 - [Cloudflare 시험 배포 절차와 무료 한도](docs/CLOUDFLARE_SETUP.md)
 - [검증 범위와 성능 측정 방법](docs/VALIDATION.md)
 - [최종 로컬 시험 결과](docs/TEST_RESULTS.md)
+- [실제 Cloudflare 시험 배포·검증 결과](docs/CLOUDFLARE_DEPLOYMENT_2026-10-30.md)
+
+실제 시험 주소: https://course-allocation-test.pages.dev
+시험용 로그인 정보는 Git에서 제외한 `.cache/cloudflare-test/LOGIN.local.md`에 보관합니다.
+기존 `course-allocation` Pages 프로젝트 및 main은 그대로 유지합니다.
 
 ## 로컬 시작
 

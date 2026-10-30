@@ -1,8 +1,9 @@
 # Cloudflare 시험 배포 절차
 
-이 문서는 **새 시험 프로젝트와 새 시험 D1**을 위한 절차입니다. 아직 원격 리소스를
-생성하거나 배포하지 않았습니다. 기존 GitHub Pages/외부 운영 서버, 운영 데이터,
-main 브랜치를 대상으로 하는 명령은 실행하지 않습니다.
+2026-10-30에 별도 시험 프로젝트 배포를 완료했습니다. 현재 주소와 실제 측정 결과는
+[원격 배포 보고서](CLOUDFLARE_DEPLOYMENT_2026-10-30.md)를 확인하세요.
+아래는 **새 환경을 구성할 때의 참고 절차**이며 현재 연결된 DB에 초기화 명령을 다시 실행하지 않습니다.
+기존 GitHub Pages/외부 운영 서버, 운영 데이터, main 브랜치는 변경하지 않습니다.
 
 ## 1. 로컬 검증
 
@@ -28,22 +29,22 @@ test:pages는 test-results/pages-d1-*에 매번 새 로컬 DB를 생성합니다
 
 ```sh
 pnpm exec wrangler login
-pnpm exec wrangler d1 create allocation-test
-pnpm exec wrangler d1 create allocation-preview
+pnpm exec wrangler d1 create course-allocation-test-db
+pnpm exec wrangler d1 create course-allocation-preview-db
 ```
 
 생성 결과의 실제 UUID를 wrangler.jsonc에 입력합니다.
 
-- 최상위 d1_databases: allocation-test의 UUID
-- env.preview.d1_databases: allocation-preview의 UUID
+- 최상위 d1_databases: 새 시험 DB의 UUID(현재 course-allocation-test-db)
+- env.preview.d1_databases: 새 미리보기 DB의 UUID(현재 course-allocation-preview-db)
 - 바인딩 이름: 두 환경 모두 DB
-- 현재 0000... UUID는 로컬 시험용 자리표시자이며 원격 배포 전에 교체해야 함
+- 현재 설정에는 실제 시험용 UUID가 반영되어 있음. 새 환경에서는 새 DB의 값으로 교체
 
 시험 DB의 이름과 UUID가 새로 만든 값인지 확인한 뒤 스키마를 적용합니다.
 
 ```sh
-pnpm exec wrangler d1 migrations apply allocation-test --remote
-pnpm exec wrangler d1 migrations apply allocation-preview --remote --env preview
+pnpm exec wrangler d1 migrations apply DB --remote
+pnpm exec wrangler d1 migrations apply DB --remote --env preview
 ```
 
 Pages의 production/preview 환경은 이 **시험 프로젝트 안의 배포 구분**입니다.
@@ -101,6 +102,8 @@ pnpm exec wrangler pages deploy dist --project-name course-allocation-test --bra
 
 이 명령은 새 시험 프로젝트에만 배포합니다. scripts/에는 자동 원격 배포/운영 DB 이전 명령이 없습니다.
 정적 파일만 수동 드래그해서 올리면 Functions가 누락될 수 있으므로 Wrangler 또는 Git 통합을 사용합니다.
+Pages 배포는 기본 파일명 wrangler.jsonc를 사용합니다. Pages 명령은 사용자 지정 --config 경로와
+account_id 설정을 지원하지 않아 사용하지 않습니다. 계정 선택은 필요할 때 CLOUDFLARE_ACCOUNT_ID 환경 변수로 지정합니다.
 
 GitHub 연동을 원하면 새 Pages 프로젝트에서 이 저장소를 연결하고 다음처럼 설정합니다.
 

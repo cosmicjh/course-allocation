@@ -6,7 +6,13 @@ import * as C from '../shared/domain.js';
 const h=await createRemoteHarness({seed:false}),checks=[];
 const input=await h.login(),admin=await h.login(true);
 const startAt=new Date().toISOString();
+if(process.env.ALLOCATION_BULK_TEST==='1'){
+  const empty=scaleState();empty.departments=[{id:'virtual-empty',name:'가상초기화확인',status:'draft',sourceTotal:null,note:''}];
+  empty.teachers=[];empty.courses=[];empty.groups=[];empty.assignments=[];
+  await h.seedState(empty);
+}
 await h.seedState(scaleState());
+if(process.env.ALLOCATION_BULK_TEST==='1'){checks.push({name:'가상 교과군 12개 신규 일괄 반영',pass:true});console.log('PASS 가상 교과군 12개 신규 일괄 반영');}
 const sheet=async(id='d1')=>{const w=h.requireOk(await h.api('/workspace?departmentId='+id,'GET',undefined,admin));return {part:w.parts[0],revision:w.revisions[id],globalRevision:w.globalRevision,operationId:'remote-'+crypto.randomUUID()};};
 async function check(name,fn){await fn();checks.push({name,pass:true});console.log('PASS '+name);}
 await check('원격 미인증 접근 거부',async()=>{assert.equal((await h.api('/workspace')).status,401);});

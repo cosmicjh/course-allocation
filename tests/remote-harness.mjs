@@ -1,5 +1,5 @@
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
-import {manifest,credentials,assertTestTarget,saveManifest} from '../scripts/cloudflare-client.mjs';
+import {manifest,credentials,assertTestTarget,saveManifest,cloudflare} from '../scripts/cloudflare-client.mjs';
 import {preparePasswordRequest} from '../shared/password.js';
 import * as S from '../shared/state.js';
 import * as C from '../shared/domain.js';
@@ -8,6 +8,9 @@ import {demoState} from './fixtures/demo.js';
 export async function createRemoteHarness({seed=true}={}){
   const m=await manifest();assertTestTarget(m);
   if(!m.projectCreatedByThisRun||!m.initializedByThisRun||!m.deploymentId||m.baseUrl!=='https://course-allocation-test.pages.dev')throw new Error('확인된 시험 배포만 시험할 수 있습니다.');
+  const deployments=await cloudflare(`/accounts/${m.accountId}/pages/projects/${m.projectName}/deployments`);
+  const active=deployments.find(d=>d.environment==='production'&&d.latest_stage.status==='success');
+  if(active?.id!==m.deploymentId)throw new Error('기록한 시험 배포와 현재 활성 배포가 다릅니다.');
   const secrets=(await credentials()).production,samples=[];
   let accessToken,adminToken,requests=0;
   async function api(path,method='GET',data,token){

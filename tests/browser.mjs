@@ -8,6 +8,7 @@ import '../scripts/build.mjs';
 
 await mkdir('test-results',{recursive:true});
 const remote=process.env.ALLOCATION_REMOTE_TEST==='1';
+const artifactDirectory=remote?'test-results/cloudflare':'test-results';await mkdir(artifactDirectory,{recursive:true});
 const h=remote?await createRemoteHarness():await createHarness();let browser;
 const testAccess=h.passwords?.access??'virtual-access-2026',testAdmin=h.passwords?.admin??'virtual-admin-2026';
 const revision=async()=>h.remote?await h.revision('d1'):(await h.db.prepare('SELECT revision FROM sheets WHERE id=\'d1\'').first()).revision;
@@ -24,7 +25,7 @@ try{
   const submit=label=>page.locator('#dialog button[type=submit]').filter({hasText:label}).click();
   const save=async()=>{const response=page.waitForResponse(r=>r.url().includes('/api/sheets/')&&r.request().method()==='PUT');await button('save-sheet').click();assert.equal((await response).status(),200);await page.waitForFunction(()=>document.querySelector('.header-save')?.textContent==='저장됨');};
   const login=async target=>{await target.goto(url);await target.locator('#access-form input').fill(testAccess);await target.locator('#access-form button').click();await target.locator('[data-edit=teacher-name]').first().waitFor();};
-  await step('접속 및 기존 배당표 표시',async()=>{await login(page);await page.screenshot({path:'test-results/01-workbook.png',fullPage:true});assert.equal(await page.locator('.plan-table').count(),1);assert.equal(await page.locator('.teacher-table').count(),1);});
+  await step('접속 및 기존 배당표 표시',async()=>{await login(page);await page.screenshot({path:artifactDirectory+'/01-workbook.png',fullPage:true});assert.equal(await page.locator('.plan-table').count(),1);assert.equal(await page.locator('.teacher-table').count(),1);});
   const otherContext=await browser.newContext(),other=await otherContext.newPage();
   await otherContext.route('**/*',route=>allowedRequest(route.request())?route.continue():route.abort());await login(other);
   await step('교사 편집·저장 및 충돌 시 로컬 입력 보존',async()=>{
@@ -61,14 +62,14 @@ try{
   });
   await step('현재 입력 내용·빈 양식 인쇄 SVG',async()=>{
     await page.evaluate(()=>{window.__virtualPrintCount=0;window.print=()=>{window.__virtualPrintCount++;};});
-    await button('print-current').click();await page.waitForFunction(()=>window.__virtualPrintCount===1);assert.equal(await page.locator('#print-root svg').count(),1);await writeFile('test-results/current-print.svg',await page.locator('#print-root').innerHTML());
+    await button('print-current').click();await page.waitForFunction(()=>window.__virtualPrintCount===1);assert.equal(await page.locator('#print-root svg').count(),1);await writeFile(artifactDirectory+'/current-print.svg',await page.locator('#print-root').innerHTML());
     await button('print-form').click();await page.waitForFunction(()=>window.__virtualPrintCount===2);assert.equal(await page.locator('#print-root svg').count(),1);
   });
   await step('교과군 생성·학교 설정·성능 측정',async()=>{
     await button('new-dept').click();await page.locator('#dialog [name=name]').fill('가상시험교과');await submit('시트 추가');await button('save-sheet').click();await page.waitForFunction(()=>document.querySelector('.header-save')?.textContent==='저장됨');
     await page.locator('[data-view=settings]').click();await page.locator('#school-form [name=name]').fill('가상시험학교');await page.locator('#school-form button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('.header-save')?.textContent==='저장됨');
     await button('performance').click();assert.match(await page.locator('#dialog').innerText(),/클라이언트/);await page.locator('[data-perf=close]').click();
-    await page.screenshot({path:'test-results/02-settings.png',fullPage:true});
+    await page.screenshot({path:artifactDirectory+'/02-settings.png',fullPage:true});
   });
   const performanceReport=await page.evaluate(()=>window.ALLOCATION_PERFORMANCE.snapshot());
   assert.ok(performanceReport.samples.some(s=>s.action==='load'));assert.ok(performanceReport.samples.some(s=>s.action==='save'));assert.deepEqual(errors,[]);

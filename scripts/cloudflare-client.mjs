@@ -20,7 +20,11 @@ export async function token(){
   if(!value)throw new Error('Wrangler OAuth 로그인이 필요합니다.');return value;
 }
 export async function cloudflare(path,{method='GET',body,allow404=false}={}){
-  const response=await fetch('https://api.cloudflare.com/client/v4'+path,{method,headers:{Authorization:'Bearer '+await token(),'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(60000)});
+  let response;
+  for(let attempt=0;attempt<3;attempt++){
+    try{response=await fetch('https://api.cloudflare.com/client/v4'+path,{method,headers:{Authorization:'Bearer '+await token(),'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(30000)});break;}
+    catch(error){if(attempt===2||!(method==='GET'||path==='/graphql'))throw error;await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));}
+  }
   const result=await response.json();if(response.status===404&&allow404)return null;
   if(!response.ok||result.success===false)throw Object.assign(new Error('Cloudflare '+response.status+': '+JSON.stringify(result.errors??result.error??'request failed')),{status:response.status});
   return result.result??result;

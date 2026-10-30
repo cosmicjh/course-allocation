@@ -15,7 +15,7 @@ try{
       const text=typeof message.data==='string'?message.data:await message.data.text(),value=JSON.parse(text);
       // Request headers, bodies, console messages and tokens are never retained.
       events.push({eventTimestamp:value.eventTimestamp,outcome:value.outcome,scriptName:value.scriptName,
-        cpuTimeMs:value.cpuTimeMs??null,cpuTime:value.cpuTime??null,wallTimeMs:value.wallTimeMs??null,
+        cpuTimeMs:value.cpuTimeMs??value.cpuTime??null,cpuTime:value.cpuTime??null,wallTimeMs:value.wallTimeMs??value.wallTime??null,
         method:value.event?.request?.method,path:value.event?.request?.url?new URL(value.event.request.url).pathname:null,fields:Object.keys(value)});
     }catch{}
   });
