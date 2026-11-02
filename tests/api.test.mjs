@@ -21,6 +21,18 @@ test('authentication, origin checks and no-store timing headers',async()=>{
   assert.equal(r.response.headers.get('cache-control'),'no-store');assert.match(r.response.headers.get('server-timing'),/db;dur=/);
   const all=await h.api('/workspace?all=true','GET',undefined,input);assert.equal(all.data.parts.length,2);
 });
+test('GitHub origin can authenticate, save with version checks and read exposed API timing',async()=>{
+  const origin={Origin:'https://cosmicjh.github.io'};
+  const access=await h.api('/access/login','POST',{code:'virtual-access-2026'},undefined,origin);assert.equal(access.status,200);
+  const token=access.data.accessToken;
+  const w=await h.api('/workspace','GET',undefined,token,origin);assert.equal(w.status,200);
+  assert.equal(w.response.headers.get('access-control-allow-origin'),origin.Origin);
+  assert.match(w.response.headers.get('access-control-expose-headers'),/Server-Timing/);
+  const before=await sheet(),value=C.clone(before);value.part.teachers[0].name='가상깃헙교사';
+  const saved=await h.api('/sheets/d1','PUT',value,token,origin);assert.equal(saved.status,200);
+  const stale={...before,operationId:op()};assert.equal((await h.api('/sheets/d1','PUT',stale,token,origin)).status,409);
+  const denied=await h.api('/sheets/d1','PUT',{...value,operationId:op()},token,{Origin:'https://foreign.example'});assert.equal(denied.status,403);assert.equal(denied.response.headers.get('access-control-allow-origin'),null);
+});
 test('same-department concurrent saves yield one success and one conflict; retry is idempotent',async()=>{
   const a=await sheet(),b=C.clone(a);a.part.teachers[0].name='가상동시A';b.part.teachers[0].name='가상동시B';b.operationId=op();
   const results=await Promise.all([h.api('/sheets/d1','PUT',a,input),h.api('/sheets/d1','PUT',b,input)]);

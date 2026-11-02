@@ -2,8 +2,13 @@
 
 ## 요청 경계
 
-Pages가 dist/의 정적 파일을 제공합니다. 브라우저는 같은 출처의 /api/*만 호출합니다.
-Functions는 DB 바인딩으로 D1에 접근합니다. iframe, 외부 RPC, Google API,
+주 접속 주소는 https://cosmicjh.github.io/course-allocation/ 입니다. GitHub Pages가
+dist-github/의 화면을 제공하며 브라우저는 https://course-allocation.pages.dev/api 를 호출합니다.
+Cloudflare 주소에서는 dist/의 화면과 같은 출처의 /api 를 계속 사용할 수 있습니다.
+외부 API는 위 GitHub 출처와 정확한 Cloudflare API 주소의 조합만 클라이언트에서 허용합니다.
+서버는 GitHub 출처에 명시적 CORS 응답을 제공하며 다른 외부 출처의 변경 요청을 거부합니다.
+인증은 기존 Bearer 토큰을 사용하며 외부 사이트 쿠키는 전송하지 않습니다.
+Functions는 기존 DB 바인딩으로 D1에 접근합니다. iframe, 외부 RPC, Google API,
 스프레드시트 SDK, 브라우저에 노출되는 DB 자격 증명은 사용하지 않습니다.
 
 index.html의 스타일과 UI 처리, 과목 목록, JSON 변환, SVG 인쇄 코드를 보존했습니다.

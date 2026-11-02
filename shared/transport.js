@@ -1,9 +1,9 @@
 import {metrics} from './performance.js';
 import {preparePasswordRequest} from './password.js';
+import {resolveApiBase} from './deployment.js';
 
 export function createTransport({onExpired=()=>{}}={}) {
-  const config=window.ALLOCATION_CONFIG??{},base=config.apiBase||'/api';
-  if(new URL(base,location.href).origin!==location.origin)throw new Error('API는 같은 사이트의 주소를 사용해야 합니다.');
+  const config=window.ALLOCATION_CONFIG??{},base=resolveApiBase(config.apiBase,location.href);
   const key='allocation-access-'+(config.appId||location.host),pending=new Map();
   let accessToken='',adminToken='',loginPending=null;
   try{accessToken=sessionStorage.getItem(key)||'';}catch{}

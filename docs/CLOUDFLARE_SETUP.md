@@ -1,6 +1,8 @@
 # Cloudflare 운영 설정
 
-운영 주소는 https://course-allocation.pages.dev, GitHub 기본 브랜치는 `main`입니다.
+주 접속 주소는 https://cosmicjh.github.io/course-allocation/ 이며,
+로그인·저장 API는 https://course-allocation.pages.dev/api, GitHub 기본 브랜치는 `main`입니다.
+GitHub 화면 배포는 [GitHub Pages 설정](GITHUB_PAGES.md)을 확인하세요.
 전환·정리 기록은 [main 배포 기록](MAIN_RELEASE_2026-10-30.md), 과거 가상 자료 검증은
 [시험 배포 보고서](CLOUDFLARE_DEPLOYMENT_2026-10-30.md)를 참고합니다.
 

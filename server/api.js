@@ -2,6 +2,7 @@ import * as C from '../shared/domain.js';
 import * as S from '../shared/state.js';
 import {digest,randomToken,credentialFromProof,passwordMatches,publicParameters,validHash} from './crypto.js';
 import {fail,boundedJson,revision,operationId,assemble,validatePart,validateGlobal,authorizePart} from './validation.js';
+import {allowedOrigin,corsHeaders,preflight} from './cors.js';
 
 const HOUR=3600000, DAY=24*HOUR;
 function store(db) {
@@ -163,7 +164,7 @@ async function route(request,env,s,now) {
   if(!/^[a-f0-9]{64}$/.test(env.PASSWORD_PEPPER||''))fail(503,'setup_required','서버 PASSWORD_PEPPER 비밀값 설정이 필요합니다.');
   const url=new URL(request.url),path=url.pathname.replace(/^\/api/,'');
   const mutating=['POST','PUT'].includes(request.method);
-  if(mutating && request.headers.has('Origin') && request.headers.get('Origin')!==url.origin)fail(403,'origin_rejected','다른 사이트에서 보낸 요청은 허용하지 않습니다.');
+  if(mutating && !allowedOrigin(request))fail(403,'origin_rejected','다른 사이트에서 보낸 요청은 허용하지 않습니다.');
   const data=mutating?await body(request):Object.fromEntries(url.searchParams);
   if(path==='/access/parameters'&&request.method==='GET')return publicParameters((await credentials(s,env,true)).access);
   if(path==='/access/login'&&request.method==='POST'){
@@ -197,10 +198,11 @@ async function route(request,env,s,now) {
   fail(404,'not_found','요청한 API를 찾을 수 없습니다.');
 }
 export async function handleRequest(request,env) {
+  if(request.method==='OPTIONS')return preflight(request);
   const start=performance.now(),s=env.DB?store(env.DB):null;let payload,status=200;
   try{if(!s)fail(503,'setup_required','D1 DB 바인딩 설정이 필요합니다.');payload={ok:true,data:await route(request,env,s,Date.now())};}
   catch(e){status=e.status||500;payload={ok:false,status,code:e.code||'server_error',message:status===500?'서버 처리 중 오류가 발생했습니다. 잠시 후 다시 시도하세요.':e.message};if(status===500)console.error('Allocation API error:',e.stack);}
-  return Response.json(payload,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
+  return Response.json(payload,{status,headers:{...corsHeaders(request),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
     'Server-Timing':`app;dur=${(performance.now()-start).toFixed(2)}, db;dur=${(s?.stats.ms??0).toFixed(2)}`,
     'X-D1-Rows-Read':String(s?.stats.read??0),'X-D1-Rows-Written':String(s?.stats.written??0),...(status===429?{'Retry-After':'60'}:{})}});
 }

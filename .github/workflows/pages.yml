@@ -1,0 +1,63 @@
+name: GitHub Pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.25.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm build:github
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-github
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Wait for Cloudflare API connection
+        run: |
+          node --input-type=module <<'NODE'
+          import {GITHUB_ORIGIN,CLOUDFLARE_API} from './shared/deployment.js';
+          let ready=false;
+          for(let attempt=0;attempt<24;attempt++){
+            try{
+              const response=await fetch(CLOUDFLARE_API+'/workspace',{method:'OPTIONS',headers:{Origin:GITHUB_ORIGIN,'Access-Control-Request-Method':'GET','Access-Control-Request-Headers':'authorization'},signal:AbortSignal.timeout(10000)});
+              if(response.status===204&&response.headers.get('access-control-allow-origin')===GITHUB_ORIGIN){ready=true;break;}
+            }catch{}
+            await new Promise(resolve=>setTimeout(resolve,5000));
+          }
+          if(!ready)throw new Error('Cloudflare API is not ready for GitHub Pages');
+          NODE
+      - id: deployment
+        uses: actions/deploy-pages@v4

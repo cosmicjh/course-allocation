@@ -1,31 +1,47 @@
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import {resolve,sep} from 'node:path';
 import {createHarness} from './harness.mjs';
 import {hoursFixture} from './fixtures/demo.js';
 import '../scripts/build.mjs';
+import {GITHUB_SITE,GITHUB_ORIGIN,CLOUDFLARE_API} from '../shared/deployment.js';
 
 await mkdir('test-results',{recursive:true});
-const artifactDirectory='test-results';
+const github=process.argv.includes('--github');
+if(github)await import('../scripts/build-github.mjs');
+const artifactDirectory=github?'test-results/github':'test-results';
+await mkdir(artifactDirectory,{recursive:true});
 const h=await createHarness();let browser;
 const testAccess='virtual-access-2026',testAdmin='virtual-admin-2026';
 const revision=async()=>(await h.db.prepare('SELECT revision FROM sheets WHERE id=\'d1\'').first()).revision;
 const steps=[],errors=[];
 async function step(name,fn){const start=performance.now();await fn();steps.push({name,ms:Math.round(performance.now()-start)});console.log('PASS '+name);}
 try{
-  const url=await h.listen();
+  const localUrl=await h.listen(),url=github?GITHUB_SITE:localUrl;
+  const fetchApi=route=>{const request=route.request(),target=new URL(request.url());return route.fetch({url:localUrl+target.pathname+target.search,headers:{...request.headers(),...(github?{origin:GITHUB_ORIGIN}:{})}});};
+  const configureRoutes=async context=>context.route('**/*',async route=>{
+    const request=route.request(),target=new URL(request.url());
+    if(!github)return target.origin===localUrl?route.continue():route.abort();
+    if(target.origin===new URL(CLOUDFLARE_API).origin&&target.pathname.startsWith('/api/'))return route.fulfill({response:await fetchApi(route)});
+    if(target.origin===GITHUB_ORIGIN&&target.pathname.startsWith('/course-allocation/')){
+      const root=resolve('dist-github'),relative=decodeURIComponent(target.pathname.slice('/course-allocation/'.length))||'index.html',file=resolve(root,relative);
+      if(!file.startsWith(root+sep))return route.abort();
+      return route.fulfill({status:200,contentType:file.endsWith('.js')?'text/javascript':'text/html',body:await readFile(file)});
+    }
+    return route.abort();
+  });
   browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHANNEL?{channel:process.env.PLAYWRIGHT_CHANNEL}:process.platform==='win32'?{channel:'msedge'}:{})});
   const context=await browser.newContext({viewport:{width:1440,height:1000}}),page=await context.newPage();
   page.on('pageerror',error=>errors.push(error.message));
-  const allowedRequest=request=>new URL(request.url()).origin===url;
-  await context.route('**/*',route=>allowedRequest(route.request())?route.continue():route.abort());
+  await configureRoutes(context);
   const button=action=>page.locator('[data-action="'+action+'"]');
   const submit=label=>page.locator('#dialog button[type=submit]').filter({hasText:label}).click();
   const save=async()=>{const response=page.waitForResponse(r=>r.url().includes('/api/sheets/')&&r.request().method()==='PUT');await button('save-sheet').click();assert.equal((await response).status(),200);await page.waitForFunction(()=>document.querySelector('.header-save')?.textContent==='저장됨');};
   const login=async target=>{await target.goto(url);await target.locator('#access-form input').fill(testAccess);await target.locator('#access-form button').click();await target.locator('[data-edit=teacher-name]').first().waitFor();};
   await step('접속 및 기존 배당표 표시',async()=>{await login(page);await page.screenshot({path:artifactDirectory+'/01-workbook.png',fullPage:true});assert.equal(await page.locator('.plan-table').count(),1);assert.equal(await page.locator('.teacher-table').count(),1);});
   const otherContext=await browser.newContext(),other=await otherContext.newPage();
-  await otherContext.route('**/*',route=>allowedRequest(route.request())?route.continue():route.abort());await login(other);
+  await configureRoutes(otherContext);await login(other);
   await step('교사 편집·저장 및 충돌 시 로컬 입력 보존',async()=>{
     await page.locator('[data-edit=teacher-name]').first().fill('가상브라우저교사');await page.locator('[data-edit=teacher-name]').first().press('Tab');await save();
     await other.locator('[data-edit=teacher-name]').first().fill('가상충돌보존');await other.locator('[data-edit=teacher-name]').first().press('Tab');
@@ -36,7 +52,7 @@ try{
   await step('저장 응답 유실 후 같은 작업 ID로 안전하게 재시도',async()=>{
     const before=await revision();
     let firstId;let finish;const failed=new Promise(resolve=>finish=resolve);
-    await page.route('**/api/sheets/d1',async route=>{firstId=route.request().postDataJSON().operationId;const response=await route.fetch();assert.equal(response.status(),200);await route.abort();finish();});
+    await page.route('**/api/sheets/d1',async route=>{firstId=route.request().postDataJSON().operationId;const response=await fetchApi(route);assert.equal(response.status(),200);await route.abort();finish();});
     await page.locator('[data-edit=teacher-name]').first().fill('가상재시도교사');await page.locator('[data-edit=teacher-name]').first().press('Tab');await button('save-sheet').click();await failed;
     await page.waitForFunction(()=>!document.querySelector('[data-action=save-sheet]').disabled);await page.unroute('**/api/sheets/d1');
     const request=page.waitForRequest(r=>r.url().includes('/api/sheets/d1'));await save();assert.equal((await request).postDataJSON().operationId,firstId);
@@ -73,7 +89,8 @@ try{
   assert.ok(performanceReport.samples.some(s=>s.action==='load'));assert.ok(performanceReport.samples.some(s=>s.action==='save'));assert.deepEqual(errors,[]);
   assert.doesNotMatch(JSON.stringify(performanceReport),/virtual-access-2026|virtual-admin-2026|가상복원교사|Bearer/);
   assert.equal(JSON.stringify(performanceReport).includes(testAccess),false);assert.equal(JSON.stringify(performanceReport).includes(testAdmin),false);
-  const report={environment:'local Miniflare + headless Chromium; synthetic data only',steps,errors,performance:performanceReport};
-  await writeFile('test-results/browser.json',JSON.stringify(report,null,2)+'\n');
+  assert.equal(new URL(page.url()).origin,new URL(url).origin);
+  const report={environment:github?'GitHub URL and Cloudflare API routing against local Miniflare only':'local Miniflare + headless Chromium; synthetic data only',steps,errors,performance:performanceReport};
+  await writeFile(artifactDirectory+'/browser.json',JSON.stringify(report,null,2)+'\n');
   console.log(`브라우저 시험 ${steps.length}개 통과`);
 }finally{await browser?.close();await h.close();}

@@ -5,8 +5,9 @@ JSON 가져오기·백업·복원, CSV, 인쇄를 유지한 Pages + Functions + 
 브라우저와 서버는 동일한 업무 검증 모듈을 사용합니다. 실행 코드에서 기존 외부 서버와
 스프레드시트 연결을 제거했습니다.
 
-운영 브랜치: **main**. 운영 주소: https://course-allocation.pages.dev
-Cloudflare Pages + Functions + D1으로 동작하며 기존 외부 서버를 호출하거나
+운영 브랜치: **main**. 접속 주소: https://cosmicjh.github.io/course-allocation/
+화면은 GitHub Pages, 로그인·저장은 기존 Cloudflare Functions + D1으로 동작합니다.
+Cloudflare 주소에서도 기존 화면을 사용할 수 있습니다. 기존 외부 서버를 호출하거나
 스프레드시트 자료를 자동으로 복사하는 코드는 없습니다.
 
 ## 문서
@@ -14,6 +15,7 @@ Cloudflare Pages + Functions + D1으로 동작하며 기존 외부 서버를 호
 - [기존 구조와 전환 계획](docs/MIGRATION_PLAN.md)
 - [구현 구조·저장·인증 계약](docs/ARCHITECTURE.md)
 - [Cloudflare 운영 설정과 무료 한도](docs/CLOUDFLARE_SETUP.md)
+- [GitHub 접속 주소와 배포 설정](docs/GITHUB_PAGES.md)
 - [main 전환·시험 자원 정리 기록](docs/MAIN_RELEASE_2026-10-30.md)
 - [검증 범위와 성능 측정 방법](docs/VALIDATION.md)
 - [최종 로컬 시험 결과](docs/TEST_RESULTS.md)
@@ -55,6 +57,7 @@ Windows에서는 설치된 도구 또는 Codex의 번들 런타임을 찾는 도
 ```sh
 pnpm test             # 업무 규칙·보안·실제 로컬 D1 통합 시험
 pnpm test:browser     # 화면, 충돌, 저장 재시도, JSON, 관리자, 인쇄 시험
+node tests/browser.mjs --github # GitHub 하위 경로와 Cloudflare API 연결을 로컬 가상 DB로 시험
 pnpm test:pages       # Wrangler Functions 빌드 및 별도 로컬 D1 마이그레이션
 pnpm test:all
 pnpm benchmark        # 가상 규모 자료 조회/저장 30회씩 측정
@@ -79,6 +82,7 @@ migrations/                D1 스키마
 scripts/                   빌드, 로컬 설정, 암호 해시 생성, 벤치마크
 tests/                     가상 자료 및 자동 시험
 dist/                      정적 배포 파일만 생성하는 출력 디렉터리
+dist-github/               GitHub Pages 전용 정적 출력(pnpm build:github)
 ```
 
 기존 화면의 CSS는 원본과 해시를 비교하는 회귀 시험으로 보호합니다.
