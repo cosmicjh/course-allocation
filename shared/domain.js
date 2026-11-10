@@ -335,6 +335,21 @@ function removeCourse(state,courseId) {
   state.groups=state.groups.filter(g=>g.courseId!==c.id);state.courses=state.courses.filter(x=>x.id!==c.id);
   for(const t of state.teachers)if(t.rows)t.rows=t.rows.filter(r=>r.courseId!==c.id);
 }
+function timetableTransfer(state) {
+  const term=state.school.year+'-'+state.school.semester,sections=[];
+  for(const department of state.departments.filter(d=>d.status==='locked'))for(const course of coursesOf(state,department.id)){
+    for(const group of groupsOf(state,course.id).filter(g=>g.kind==='moving'))for(const slot of group.slots){
+      const code=String(slot.label).replace(new RegExp('^'+course.grade+'(?=[A-Z])','i'),'');
+      if(!/^[A-Z]+[0-9]*$/i.test(code))throw new Error(course.name+'의 실제 분반 코드를 확인하세요.');
+      const teachers=state.assignments.filter(a=>a.sectionId===slot.id).map(a=>({name:state.teachers.find(t=>t.id===a.teacherId).name,hours:a.hours}));
+      sections.push({grade:String(course.grade),subject:course.name,code,weeklyHours:slot.hours,teachers});
+    }
+  }
+  if(!sections.length)throw new Error('확정된 이동수업 분반이 없습니다.');
+  const keys=sections.map(s=>[s.grade,normalizeName(s.subject),s.code.toUpperCase()].join('|'));
+  if(new Set(keys).size!==keys.length)throw new Error('동일 학년·과목의 실제 분반 코드가 중복됩니다.');
+  return {format:'school-course-allocation-transfer',schemaVersion:1,term,sections};
+}
 function csv(state, deptId) {
   const rows=[['학년도','학기','교과군','과목','학년','상위분반','실제분반','분반유형','분반필요시수(교사별행 반복)','교사','부장','담당시수','구분']];
   const teacher=id=>{const t=state.teachers.find(t=>t.id===id);return [t.name,t.isLead?'예':''];};
@@ -352,4 +367,4 @@ function csv(state, deptId) {
   return '\uFEFF'+rows.map(row=>row.map(cell).join(',')).join('\r\n');
 }
 
-export {clone,teacherLabel,normalizeName,nameHash,upgradeState,sum,uid,letter,integer,coursesOf,groupsOf,teachersOf,groupOfSection,allocated,isSplitGroup,teacherHours,metrics,assertDraft,setAssignment,rebuildGroup,groupPlan,setSectionPlan,setGroupPlan,resolvePool,mapSourceName,validate,changeStatus,addCourse,addGroup,removeGroup,validateSchool,assertState,teacherRows,addTeacher,setTeacherName,addTeacherRow,setTeacherRow,teacherCourseHours,removeTeacherRow,setPlannedCell,updateTeacherGroup,removeCourse,csv};
+export {timetableTransfer,clone,teacherLabel,normalizeName,nameHash,upgradeState,sum,uid,letter,integer,coursesOf,groupsOf,teachersOf,groupOfSection,allocated,isSplitGroup,teacherHours,metrics,assertDraft,setAssignment,rebuildGroup,groupPlan,setSectionPlan,setGroupPlan,resolvePool,mapSourceName,validate,changeStatus,addCourse,addGroup,removeGroup,validateSchool,assertState,teacherRows,addTeacher,setTeacherName,addTeacherRow,setTeacherRow,teacherCourseHours,removeTeacherRow,setPlannedCell,updateTeacherGroup,removeCourse,csv};

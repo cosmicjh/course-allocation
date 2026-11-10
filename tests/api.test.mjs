@@ -13,6 +13,24 @@ async function sheet(id='d1'){
   const r=await h.api('/workspace?departmentId='+id,'GET',undefined,admin);assert.equal(r.status,200);
   return {part:r.data.parts[0],revision:r.data.revisions[id],globalRevision:r.data.globalRevision,operationId:op()};
 }
+test('timetable policy gates teacher access and switching restores the correct workspace',async t=>{
+  const policy={term:'2026-1',teachers:false},app=await createHarness({policy});t.after(()=>app.close());
+  const input=await app.login(),admin=await app.login(true);
+  assert.equal((await app.api('/workspace','GET',undefined,input)).code,'course_closed');
+  policy.teachers=true;
+  const original=await app.api('/workspace?timetableTerm=2026-1&all=true','GET',undefined,input);assert(original.ok);
+  assert.equal((await app.api('/term','POST',{term:'2026-2'},input)).status,403);
+  policy.term='2026-2';
+  assert.equal((await app.api('/workspace?timetableTerm=2026-2','GET',undefined,input)).code,'allocation_term_mismatch');
+  assert((await app.api('/term?timetableTerm=2026-2','POST',{term:'2026-2'},admin)).ok);
+  const next=await app.api('/workspace?timetableTerm=2026-2','GET',undefined,input);assert(next.ok);
+  assert.equal(next.data.parts[0].courses.length,0);
+  assert.equal((await app.api('/workspace?timetableTerm=2026-1','GET',undefined,input)).code,'term_mismatch');
+  policy.term='2026-1';
+  assert((await app.api('/term?timetableTerm=2026-1','POST',{term:'2026-1'},admin)).ok);
+  const restored=await app.api('/workspace?timetableTerm=2026-1&all=true','GET',undefined,input);assert(restored.ok);
+  assert.deepEqual(restored.data.parts,original.data.parts);
+});
 test('authentication, origin checks and no-store timing headers',async()=>{
   assert.equal((await h.api('/workspace')).status,401);
   assert.equal((await h.api('/access/login','POST',{code:'wrong'})).status,401);

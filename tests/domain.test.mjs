@@ -9,6 +9,13 @@ import * as P from '../shared/print.js';
 import * as Reset from '../shared/reset.js';
 import {demoState,hoursFixture} from './fixtures/demo.js';
 
+test('timetable transfer exports confirmed moving sections with semester and teacher hours',()=>{
+  const state=demoState();
+  assert.throws(()=>C.timetableTransfer(state),/확정/);
+  state.departments[0].status='locked';
+  assert.deepEqual(C.timetableTransfer(state),{format:'school-course-allocation-transfer',schemaVersion:1,term:'2026-1',sections:[{grade:'2',subject:'가상국어 과목',code:'A',weeklyHours:3,teachers:[{name:'가상교사1',hours:3}]}]});
+});
+
 test('original stylesheet is preserved byte-for-byte after newline normalization',async()=>{
   const html=(await readFile('index.html','utf8')).replace(/\r\n/g,'\n'),baseline=JSON.parse(await readFile('tests/fixtures/ui-baseline.json','utf8'));
   assert.equal(createHash('sha256').update(html.match(/<style>([\s\S]*?)<\/style>/)[1]).digest('hex'),baseline.cssSha256);

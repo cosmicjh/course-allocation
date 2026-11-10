@@ -8,13 +8,13 @@ import {preparePasswordRequest} from '../shared/password.js';
 import {demoSeed} from './fixtures/demo.js';
 
 let bundle,hashes;
-export async function createHarness({seed=true}={}){
+export async function createHarness({seed=true,policy}={}){
   const trace=message=>{if(process.env.DEBUG_HARNESS)console.log('harness:',message);};
   trace('bundle');
   bundle??=(await build({entryPoints:['tests/worker.mjs'],bundle:true,format:'esm',platform:'browser',write:false})).outputFiles[0].text;
   if(!hashes){const pepper=randomToken();hashes={PASSWORD_PEPPER:pepper,BOOTSTRAP_ACCESS_HASH:await provisionCredential('virtual-access-2026',pepper,'access'),BOOTSTRAP_ADMIN_HASH:await provisionCredential('virtual-admin-2026',pepper,'admin')};}
   trace('runtime');
-  const mf=new Miniflare({modules:true,script:bundle,compatibilityDate:'2026-07-30',d1Databases:{DB:'virtual-'+crypto.randomUUID()},bindings:hashes,host:'127.0.0.1',port:0,log:new Log(LogLevel.ERROR)});
+  const mf=new Miniflare({modules:true,script:bundle,compatibilityDate:'2026-07-30',d1Databases:{DB:'virtual-'+crypto.randomUUID()},bindings:{...hashes,...(policy?{TIMETABLE_POLICY_ENABLED:'true'}:{})},...(policy?{serviceBindings:{TIMETABLE_POLICY:()=>Response.json({ok:true,data:policy})}}:{}),host:'127.0.0.1',port:0,log:new Log(LogLevel.ERROR)});
   // Use asynchronous HTTP fixture calls instead of Miniflare's synchronous Node proxy.
   // That proxy can block indefinitely under Windows/Node worker-thread launch flags.
   const db={prepare(sql){let args=[];const query={bind(...values){args=values;return query;},async all(){const r=await mf.dispatchFetch('http://localhost/__virtual_fixture_sql',{method:'POST',body:JSON.stringify({sql,args})});if(!r.ok)throw new Error(await r.text());return r.json();},async run(){return query.all();},async first(){return (await query.all()).results[0]??null;}};return query;}};
@@ -23,6 +23,7 @@ export async function createHarness({seed=true}={}){
   const sql=await readFile('migrations/0001_init.sql','utf8');
   const statements=sql.replace(/^--.*$/gm,'').split(/;\s*(?=CREATE (?:TABLE|INDEX|VIEW|TRIGGER)|INSERT INTO (?:workspace|sheets))/).map(x=>x.trim()).filter(Boolean);
   for(const statement of statements)await db.prepare(statement).run();
+  await db.prepare(await readFile('migrations/0002_term_archives.sql','utf8')).run();
   trace('seed');
   if(seed)for(const statement of demoSeed().trim().split(/;\s*/).filter(Boolean))await db.prepare(statement).run();
   } catch(error) { await mf.dispose();throw error; }
