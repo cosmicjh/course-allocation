@@ -4,7 +4,8 @@ import {resolveApiBase} from './deployment.js';
 
 export function createTransport({onExpired=()=>{}}={}) {
   const config=window.ALLOCATION_CONFIG??{},base=resolveApiBase(config.apiBase,location.href);
-  const linkedTerm=new URL(location.href).searchParams.get('term');
+  const bridgeToken=new URLSearchParams(location.hash.slice(1)).get('session');
+  if(bridgeToken)history.replaceState(null,'',location.pathname+location.search);
   const key='allocation-access-'+(config.appId||location.host),pending=new Map();
   let accessToken='',adminToken='',loginPending=null;
   try{accessToken=sessionStorage.getItem(key)||'';}catch{}
@@ -16,7 +17,6 @@ export function createTransport({onExpired=()=>{}}={}) {
     try{
       data=await preparePasswordRequest(path,data,parametersPath=>call(parametersPath,'GET',undefined,token));
       const url=new URL(base.replace(/\/$/,'')+path,location.origin);
-      if(linkedTerm)url.searchParams.set('timetableTerm',linkedTerm);
       if(method==='GET'&&data)for(const [name,value] of Object.entries(data))url.searchParams.set(name,String(value));
       const response=await fetch(url,{method,headers:{...(token?{Authorization:'Bearer '+token}:{}),...(method==='GET'?{}:{'Content-Type':'application/json'})},
         ...(method==='GET'?{}:{body:JSON.stringify(data??{})}),signal:controller.signal,cache:'no-store',credentials:'same-origin'});
@@ -44,7 +44,7 @@ export function createTransport({onExpired=()=>{}}={}) {
   }
   async function request(path,method='GET',data){
     const initial=method==='GET'&&path==='/workspace'&&data===undefined;
-    if(!accessToken){const workspace=await login(initial);if(initial&&workspace)return workspace;}
+    if(!bridgeToken&&!accessToken){const workspace=await login(initial);if(initial&&workspace)return workspace;}
     // Keep the same operation ID until an ambiguous save has a confirmed outcome.
     if(method==='PUT'){
       const {operationId:ignored,...content}=data;
@@ -54,9 +54,9 @@ export function createTransport({onExpired=()=>{}}={}) {
     }
     let result;
     try{
-      try{result=await call(path,method,data,adminToken||accessToken);}
+      try{result=await call(path,method,data,bridgeToken||adminToken||accessToken);}
       catch(error){
-        if(error.code==='access_required'){
+        if(!bridgeToken&&error.code==='access_required'){
           adminToken='';keepAccess('');onExpired();const workspace=await login(initial);if(initial&&workspace)return workspace;
           result=await call(path,method,data,accessToken);
         }else throw error;
@@ -71,5 +71,5 @@ export function createTransport({onExpired=()=>{}}={}) {
       throw error;
     }
   }
-  return {request};
+  return {request,linked:Boolean(bridgeToken)};
 }

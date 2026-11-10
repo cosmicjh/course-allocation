@@ -13,23 +13,31 @@ async function sheet(id='d1'){
   const r=await h.api('/workspace?departmentId='+id,'GET',undefined,admin);assert.equal(r.status,200);
   return {part:r.data.parts[0],revision:r.data.revisions[id],globalRevision:r.data.globalRevision,operationId:op()};
 }
-test('timetable policy gates teacher access and switching restores the correct workspace',async t=>{
-  const policy={term:'2026-1',teachers:false},app=await createHarness({policy});t.after(()=>app.close());
-  const input=await app.login(),admin=await app.login(true);
-  assert.equal((await app.api('/workspace','GET',undefined,input)).code,'course_closed');
+test('timetable login roles, independent term switching and transfer use the requested workspace',async t=>{
+  const policy={term:'2026-1',teachers:false};
+  const teacher='tt.'+'a'.repeat(72),admin='tt.'+'b'.repeat(72);let sent;
+  const bridge=({token,transfer})=>{
+    if(!policy.teachers)return Response.json({ok:false,code:'COURSE_CLOSED'},{status:403});
+    if(transfer){sent=transfer;return Response.json({ok:true,data:{term:transfer.term,sections:transfer.sections.length}});}
+    return Response.json({ok:true,data:{role:token===admin?'admin':'teacher'}});
+  };
+  const app=await createHarness({policy,bridge});t.after(()=>app.close());
+  assert.equal((await app.api('/workspace','GET',undefined,teacher)).code,'course_closed');
+  assert.equal((await app.api('/workspace','GET',undefined,admin)).code,'course_closed');
   policy.teachers=true;
-  const original=await app.api('/workspace?timetableTerm=2026-1&all=true','GET',undefined,input);assert(original.ok);
-  assert.equal((await app.api('/term','POST',{term:'2026-2'},input)).status,403);
-  policy.term='2026-2';
-  assert.equal((await app.api('/workspace?timetableTerm=2026-2','GET',undefined,input)).code,'allocation_term_mismatch');
-  assert((await app.api('/term?timetableTerm=2026-2','POST',{term:'2026-2'},admin)).ok);
-  const next=await app.api('/workspace?timetableTerm=2026-2','GET',undefined,input);assert(next.ok);
-  assert.equal(next.data.parts[0].courses.length,0);
-  assert.equal((await app.api('/workspace?timetableTerm=2026-1','GET',undefined,input)).code,'term_mismatch');
-  policy.term='2026-1';
-  assert((await app.api('/term?timetableTerm=2026-1','POST',{term:'2026-1'},admin)).ok);
-  const restored=await app.api('/workspace?timetableTerm=2026-1&all=true','GET',undefined,input);assert(restored.ok);
+  const original=await app.api('/workspace?all=true','GET',undefined,teacher);assert(original.ok);assert.equal(original.data.admin,false);
+  assert.equal((await app.api('/term','POST',{term:'2026-2'},teacher)).status,403);
+  assert((await app.api('/term','POST',{term:'2026-2'},admin)).ok);
+  const next=await app.api('/workspace','GET',undefined,teacher);assert(next.ok);
+  assert.equal(next.data.global.school.semester,2);assert.equal(next.data.parts[0].courses.length,0);
+  assert.equal(policy.term,'2026-1');
+  assert((await app.api('/term','POST',{term:'2026-1'},admin)).ok);
+  const restored=await app.api('/workspace?all=true','GET',undefined,teacher);assert(restored.ok);
   assert.deepEqual(restored.data.parts,original.data.parts);
+  await app.db.prepare("UPDATE sheets SET payload=json_set(payload,'$.department.status','locked') WHERE id='d1'").run();
+  assert.equal((await app.api('/timetable-transfer','POST',{term:'2026-1'},teacher)).status,403);
+  const result=await app.api('/timetable-transfer','POST',{term:'2026-1'},admin);assert(result.ok);
+  assert.equal(sent.term,'2026-1');assert.equal(sent.sections.length,1);
 });
 test('authentication, origin checks and no-store timing headers',async()=>{
   assert.equal((await h.api('/workspace')).status,401);

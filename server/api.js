@@ -6,7 +6,7 @@ import {allowedOrigin,corsHeaders,preflight} from './cors.js';
 
 const HOUR=3600000, DAY=24*HOUR;
 const termOf=global=>global.school.year+'-'+global.school.semester;
-async function timetablePolicy(env,term,role){
+async function timetablePolicy(env){
   let policy;
   try{
     const url='https://school-timetable.cosmicjh.workers.dev/api/courseAllocationPolicy';
@@ -15,12 +15,18 @@ async function timetablePolicy(env,term,role){
     if(response.ok)policy=(await response.json()).data;
   }catch{}
   if(!policy)fail(503,'timetable_unavailable','통합시간표의 학기 설정을 확인하지 못했습니다.');
-  if(term&&policy.term!==term)fail(409,'term_mismatch','통합시간표에서 현재 학기의 시수배당표를 다시 여세요.');
-  if(role!=='admin'&&!policy.teachers)fail(403,'course_closed','관리자가 현재 학기의 교사 열람·입력을 열어야 합니다.');
-  return policy.term;
+  if(!policy.teachers)fail(403,'course_closed','관리자 설정에서 시수배당표 사용을 허용해야 합니다.');
 }
-function requireTerm(global,term){
-  if(term&&term!==termOf(global))fail(409,'allocation_term_mismatch','시수배당표의 활성 학기가 다릅니다. 관리자가 먼저 학기를 전환해 주세요.');
+async function timetableBridge(env,token,transfer){
+  let response,data;
+  try{
+    const url='https://school-timetable.cosmicjh.workers.dev/api/courseBridge';
+    const options={method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,transfer}),signal:AbortSignal.timeout(10000)};
+    response=await (env.TIMETABLE_POLICY?env.TIMETABLE_POLICY.fetch(url,options):fetch(url,options));
+    data=await response.json();
+  }catch{fail(503,'timetable_unavailable','통합시간표 연결을 확인해 주세요.');}
+  if(!response.ok||!data.ok)fail(response.status,data.code==='COURSE_CLOSED'?'course_closed':'timetable_session',data.error||'통합시간표에서 시수배당표를 다시 열어 주세요.');
+  return data.data;
 }
 function store(db) {
   const stats={ms:0,read:0,written:0};
@@ -85,7 +91,6 @@ async function workspace(s,options={},admin=false) {
     ['SELECT id,revision,json_extract(payload,\'$.department\') AS department, CASE WHEN ? OR id=COALESCE(?,(SELECT json_extract(payload,\'$.departmentIds[0]\') FROM workspace WHERE id=1)) THEN payload ELSE NULL END AS payload FROM sheets',all?1:0,options.departmentId??null]
   ]);
   const global=JSON.parse(globals[0].payload),byId=new Map(rows.map(r=>[r.id,r]));
-  requireTerm(global,options.linkedTerm);
   const ordered=global.departmentIds.map(id=>byId.get(id));
   if(ordered.some(r=>!r))fail(500,'invalid_database','학교 설정과 교과군 자료가 일치하지 않습니다.');
   const selected=options.departmentId??global.departmentIds[0];
@@ -209,30 +214,33 @@ async function route(request,env,s,now) {
   const mutating=['POST','PUT'].includes(request.method);
   if(mutating && !allowedOrigin(request))fail(403,'origin_rejected','다른 사이트에서 보낸 요청은 허용하지 않습니다.');
   const data=mutating?await body(request):Object.fromEntries(url.searchParams);
-  const linkedTerm=url.searchParams.get('timetableTerm');
   if(path==='/access/parameters'&&request.method==='GET')return publicParameters((await credentials(s,env,true)).access);
   if(path==='/access/login'&&request.method==='POST'){
     await limitLogin(s,request,now);const cred=await credentials(s,env,true);
     if(data.credentialEpoch!==cred.access.epoch)fail(409,'credential_changed','접속 비밀번호가 변경되었습니다. 다시 시도하세요.');
     if(!await passwordMatches(data.code,cred.access.password_hash,env.PASSWORD_PEPPER,'access'))fail(401,'wrong_password','접속 비밀번호가 일치하지 않습니다.');
     const session=await newSession(cred,'input',now);await s.batch([session.sql]);await prune(s,now);
-    return {accessToken:session.token,...(data.includeState&&!linkedTerm&&env.TIMETABLE_POLICY_ENABLED!=='true'?{workspace:await workspace(s,{},false)}:{})};
+    return {accessToken:session.token,...(data.includeState&&env.TIMETABLE_POLICY_ENABLED!=='true'?{workspace:await workspace(s,{},false)}:{})};
   }
-  const session=await authenticate(s,request,now);
-  if(path==='/term'&&request.method==='POST'){
+  const bridgeToken=request.headers.get('Authorization')?.match(/^Bearer (tt\.[a-f0-9]{72,512})$/)?.[1];
+  const session=bridgeToken?await timetableBridge(env,bridgeToken):await authenticate(s,request,now);
+  if(bridgeToken&&(path.startsWith('/auth/')||path==='/access/password'))fail(403,'timetable_session','로그인·비밀번호는 통합시간표에서 관리하세요.');
+  if(path==='/timetable-transfer'&&request.method==='POST'){
     requireAdmin(session);
-    if(linkedTerm){if(data.term!==linkedTerm)fail(409,'term_mismatch','요청 학기가 다릅니다.');await timetablePolicy(env,linkedTerm,session.role);}
-    return switchTerm(s,data.term,session,now);
+    if(!bridgeToken)fail(403,'timetable_session','통합시간표 관리자 화면에서 시수배당표를 다시 열어 주세요.');
+    const current=await workspace(s,{all:true},true),transfer=C.timetableTransfer(assemble(current.global,current.parts));
+    if(data.term!==transfer.term)fail(409,'term_mismatch','시수배당 학기가 변경됐습니다. 자료를 다시 불러와 주세요.');
+    return timetableBridge(env,bridgeToken,transfer);
   }
-  const isWorkspace=path==='/workspace'||path==='/state'||path==='/global'||path.startsWith('/sheets/');
-  if(isWorkspace&&(linkedTerm||env.TIMETABLE_POLICY_ENABLED==='true'&&session.role!=='admin')){
-    data.linkedTerm=await timetablePolicy(env,linkedTerm,session.role);
-    if(mutating)requireTerm(JSON.parse((await s.first('SELECT payload FROM workspace WHERE id=1')).payload),data.linkedTerm);
+  const isWorkspace=path==='/workspace'||path==='/state'||path==='/global'||path==='/term'||path.startsWith('/sheets/');
+  if(isWorkspace&&!bridgeToken&&env.TIMETABLE_POLICY_ENABLED==='true')await timetablePolicy(env);
+  if(path==='/term'&&request.method==='POST'){
+    return switchTerm(s,data.term,session,now);
   }
   if(path==='/auth/parameters'&&request.method==='GET')return publicParameters((await credentials(s,env)).admin);
   if(path==='/workspace'&&request.method==='GET')return workspace(s,data,session.role==='admin');
   if(path==='/state'&&request.method==='GET'){
-    const w=await workspace(s,{all:true,linkedTerm:data.linkedTerm},session.role==='admin');
+    const w=await workspace(s,{all:true},session.role==='admin');
     return {state:assemble(w.global,w.parts),globalRevision:w.globalRevision,revisions:w.revisions,admin:w.admin};
   }
   if(path==='/auth/login'&&request.method==='POST'){

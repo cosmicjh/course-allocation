@@ -456,7 +456,6 @@ const Reset=await import("./shared/reset.js");
 const defaultNameHashes={};
 const {createTransport}=await import("./shared/transport.js");
 const {metrics,showPerformance}=await import("./shared/performance.js");
-const linkedTerm=new URL(location.href).searchParams.get('term');
 const apiTransport=createTransport({onExpired(){if(cloud.ready){cloud.admin=false;ui.mode="input";ui.view="sheet";}}});
 
 
@@ -544,12 +543,12 @@ function render(){
       <div class="workbook-brand"><strong>교과 시수배당</strong><span>${state.school.year}학년도 ${state.school.semester}학기</span></div>
       <div class="header-actions"><span class="header-save">${cloud.loading?'자료 조회 중':cloud.dirty.has(dept().id)||cloud.globalDirty?'저장 전':'저장됨'}</span>${btn('save-sheet',e(dept().name)+' 저장','','primary',`data-id="${dept().id}" ${cloud.saving||cloud.loading?'disabled':''}`)}</div>
     </header>
-    <div class="workbook-nav"><nav aria-label="작업 메뉴">${nav.map(([v,n])=>`<button data-view="${v}" class="${ui.view===v?'active':''}" ${ui.view===v?'aria-current="page"':''}>${n}</button>`).join('')}</nav><div class="file-actions">${admin?`${btn('hours-import','분반배정 가져오기','upload','small',cloud.saving||cloud.loading?'disabled':'')}${btn('refresh','불러오기','','small')}${btn('backup','백업','download','small')}${btn('restore','복원','upload','small')}${btn('csv','CSV','download','small')}${btn('timetable-transfer','시간표용 JSON','download','small')}${btn('reset-data','초기화','','small',cloud.saving||cloud.loading||ui.printing?'disabled':'')}`:''}${btn('print-form','양식 인쇄','','small',ui.printing||cloud.saving||cloud.loading?'disabled':'')}${btn('print-current','입력 내용 인쇄','','small',ui.printing||cloud.saving||cloud.loading?'disabled':'')}</div></div>
+    <div class="workbook-nav"><nav aria-label="작업 메뉴">${nav.map(([v,n])=>`<button data-view="${v}" class="${ui.view===v?'active':''}" ${ui.view===v?'aria-current="page"':''}>${n}</button>`).join('')}</nav><div class="file-actions">${admin?`${btn('hours-import','분반배정 가져오기','upload','small',cloud.saving||cloud.loading?'disabled':'')}${btn('refresh','불러오기','','small')}${btn('backup','백업','download','small')}${btn('restore','복원','upload','small')}${btn('csv','CSV','download','small')}${btn('timetable-transfer','시간표용 JSON','download','small')}${apiTransport.linked?btn('timetable-sync','통합시간표로 전달','','small'):''}${btn('reset-data','초기화','','small',cloud.saving||cloud.loading||ui.printing?'disabled':'')}`:''}${btn('print-form','양식 인쇄','','small',ui.printing||cloud.saving||cloud.loading?'disabled':'')}${btn('print-current','입력 내용 인쇄','','small',ui.printing||cloud.saving||cloud.loading?'disabled':'')}</div></div>
     ${ui.mode==='admin'&&ui.importedDeptIds?.some(id=>cloud.dirty.has(id))?`<p class="hours-import-pending" data-pending="import">분반배정 가져오기 적용됨 · 저장할 교과군: ${ui.importedDeptIds.filter(id=>cloud.dirty.has(id)).map(id=>e(state.departments.find(d=>d.id===id)?.name)).join(' · ')}</p>`:''}
     ${ui.mode==='admin'&&ui.resetDeptIds?.some(id=>cloud.dirty.has(id))?`<p class="hours-import-pending" data-pending="reset">초기화 적용됨 · 저장할 교과군: ${ui.resetDeptIds.filter(id=>cloud.dirty.has(id)).map(id=>e(state.departments.find(d=>d.id===id)?.name)).join(' · ')}</p>`:''}
     ${!draft()?`<div class="notice neutral">${e(dept().name)} · ${statusText[dept().status]}</div>`:''}
     <main id="main" class="${ui.view==='sheet'?'sheet-main':'page-main'}">${({sheet:sheetView,settings:settingsView,validation:validationView}[ui.view]??sheetView)()}</main>
-    <footer class="sheet-dock"><div class="sheet-tabs" role="tablist" aria-label="교과군">${state.departments.map(d=>`<button type="button" role="tab" aria-selected="${d.id===dept().id}" data-sheet="${d.id}" class="sheet-tab ${d.id===dept().id?'active':''}">${e(d.name)}<i class="unsaved-dot" ${cloud.dirty.has(d.id)?'':'hidden'}></i></button>`).join('')}${admin?btn('new-dept','+','','sheet-add','aria-label="교과군 추가"'):''}</div>${btn('mode-admin','관리자','','admin-entry',`aria-pressed="${admin}" title="${admin?'관리자 종료':'관리자 로그인'}"`)}</footer>
+    <footer class="sheet-dock"><div class="sheet-tabs" role="tablist" aria-label="교과군">${state.departments.map(d=>`<button type="button" role="tab" aria-selected="${d.id===dept().id}" data-sheet="${d.id}" class="sheet-tab ${d.id===dept().id?'active':''}">${e(d.name)}<i class="unsaved-dot" ${cloud.dirty.has(d.id)?'':'hidden'}></i></button>`).join('')}${admin?btn('new-dept','+','','sheet-add','aria-label="교과군 추가"'):''}</div>${apiTransport.linked?'':btn('mode-admin','관리자','','admin-entry',`aria-pressed="${admin}" title="${admin?'관리자 종료':'관리자 로그인'}"`)}</footer>
   </div>`;
   applyFrameSize();alignHorizontalScroll(scroll?.left);observeHorizontalFrames();const next=document.querySelector('.sheet-scroll');if(scroll&&next){next.scrollLeft=scroll.left;next.scrollTop=scroll.top;const plan=document.querySelector('.plan-scroll');if(plan){plan.scrollLeft=scroll.left;plan.scrollTop=scroll.planTop;}}const tabs=document.querySelector('.sheet-tabs');if(tabs)tabs.scrollLeft=dockLeft;applyHighlight();
 }
@@ -760,7 +759,7 @@ function sheetView(){
   </div>`;
 }
 
-function settingsView(){return `${heading('학교 설정','학급·이동 분반 수를 설정합니다. 교과군은 하단 시트에서 추가·전환합니다.')}<section class="panel"><div class="panel-head" style="flex-wrap:wrap"><h2>학교 설정</h2>${cloud.admin?`<div class="bottom-actions" style="margin-top:0;flex-wrap:wrap">${btn('performance','성능 측정','','small')}${btn('access-password','접속 비밀번호 변경','','small')}${btn('password','관리자 비밀번호 변경','','small')}</div>`:''}</div><div class="panel-body"><form id="school-form"><div class="form-grid"><label class="field">학교명<input name="name" value="${e(state.school.name)}" placeholder="학교명 입력" maxlength="80"></label><label class="field">학년도<input name="year" type="number" min="2000" max="2100" value="${state.school.year}" required></label><label class="field">학기<select name="semester"><option value="1" ${state.school.semester===1?'selected':''}>1학기</option><option value="2" ${state.school.semester===2?'selected':''}>2학기</option></select></label></div><div class="table-scroll spaced"><table class="grade-table"><thead><tr><th>학년</th><th>원반 수</th><th>이동수업 분반 수</th><th>이동수업 코드</th></tr></thead><tbody>${state.school.grades.map(g=>`<tr><td>${g.grade}학년</td><td><input name="class${g.grade}" aria-label="${g.grade}학년 원반 수" type="number" min="0" max="40" value="${g.classCount}" required></td><td><input name="moving${g.grade}" aria-label="${g.grade}학년 이동 분반 수" type="number" min="0" max="52" value="${g.movingCount}" required></td><td class="muted">${g.movingCount?`${g.grade}A부터 ${g.grade}${C.letter(g.movingCount)}까지`:'없음'}</td></tr>`).join('')}</tbody></table></div><p class="setting-note spaced">대형 분반의 하위 분반은 과목별로 지정합니다. 3C1·3C2를 개설해도 학년 전체 이동수업 코드 수는 증가하지 않습니다.</p><div class="bottom-actions"><button type="submit" class="primary">${icon('save')}학교 설정 저장</button></div></form></div></section>`;}
+function settingsView(){return `${heading('학교 설정','학급·이동 분반 수를 설정합니다. 교과군은 하단 시트에서 추가·전환합니다.')}<section class="panel"><div class="panel-head" style="flex-wrap:wrap"><h2>학교 설정</h2>${cloud.admin?`<div class="bottom-actions" style="margin-top:0;flex-wrap:wrap">${btn('performance','성능 측정','','small')}${apiTransport.linked?'':btn('access-password','접속 비밀번호 변경','','small')+btn('password','관리자 비밀번호 변경','','small')}</div>`:''}</div><div class="panel-body"><form id="school-form"><div class="form-grid"><label class="field">학교명<input name="name" value="${e(state.school.name)}" placeholder="학교명 입력" maxlength="80"></label><label class="field">학년도<input name="year" type="number" min="2000" max="2100" value="${state.school.year}" required></label><label class="field">학기<select name="semester"><option value="1" ${state.school.semester===1?'selected':''}>1학기</option><option value="2" ${state.school.semester===2?'selected':''}>2학기</option></select></label></div><div class="table-scroll spaced"><table class="grade-table"><thead><tr><th>학년</th><th>원반 수</th><th>이동수업 분반 수</th><th>이동수업 코드</th></tr></thead><tbody>${state.school.grades.map(g=>`<tr><td>${g.grade}학년</td><td><input name="class${g.grade}" aria-label="${g.grade}학년 원반 수" type="number" min="0" max="40" value="${g.classCount}" required></td><td><input name="moving${g.grade}" aria-label="${g.grade}학년 이동 분반 수" type="number" min="0" max="52" value="${g.movingCount}" required></td><td class="muted">${g.movingCount?`${g.grade}A부터 ${g.grade}${C.letter(g.movingCount)}까지`:'없음'}</td></tr>`).join('')}</tbody></table></div><p class="setting-note spaced">대형 분반의 하위 분반은 과목별로 지정합니다. 3C1·3C2를 개설해도 학년 전체 이동수업 코드 수는 증가하지 않습니다.</p><div class="bottom-actions"><button type="submit" class="primary">${icon('save')}학교 설정 저장</button></div></form></div></section>`;}
 function validationView(){const issues=C.validate(state,dept().id),labels={teacher:'이름 입력',pool:'배정 나누기',alias:'과목 연결',structure:'분반 설정',missing:'시수 배분',over:'배정 확인',empty:'분반 추가'};return `${heading(`${e(dept().name)} 배당 검증`,'미입력 항목과 분반별 시수 합계를 확인합니다.','')}<section class="panel"><div class="panel-head"><h2>확인 항목</h2>${badge(`${issues.length}개`,issues.length?'amber':'teal')}</div><div class="issue-list">${issues.map((x,i)=>`<div class="issue-row"><div class="issue-icon">${icon('alert')}</div><div class="issue-content"><strong>${e(x.title)}</strong><p>${e(x.detail)}</p></div>${btn('fix-issue',labels[x.type]??'확인','','small',`data-index="${i}"`)}</div>`).join('')||'<div class="empty">모든 확인 항목이 해결되었습니다.</div>'}</div></section><section class="panel"><div class="panel-body actions">${draft()?btn('submit','검증 후 제출','check','primary'):''}${ui.mode==='admin'&&dept().status==='submitted'?btn('approve','관리자 확정','check','primary'):''}${ui.mode==='admin'&&!draft()?btn('reopen','입력 다시 열기'):''}<span class="muted tiny">제출 후에는 입력을 다시 열기 전까지 수정을 잠급니다.</span></div></section>`;}
 
 function showDialog(title,body,submit,save='적용',wide=false){dialog.className=wide?'wide':'';dialog.innerHTML=`<form id="dialog-form"><div class="dialog-head"><h2 id="dialog-title">${title}</h2>${btn('close-dialog','','close','ghost','aria-label="닫기"')}</div><div class="dialog-body">${body}</div><div id="dialog-error" class="dialog-error" role="alert"></div><div class="dialog-footer">${submit?`<button type="submit" class="primary">${save}</button>`:''}</div></form>`;document.querySelector('#dialog-form').onsubmit=async event=>{event.preventDefault();try{await submit?.(new FormData(event.currentTarget),event.currentTarget);}catch(err){document.querySelector('#dialog-error').textContent=err.message;}};if(!dialog.open)dialog.showModal();dialog.scrollTop=0;}
@@ -808,7 +807,7 @@ function focusCell(selector,{select=true,scroll=false}={}){
   return x;
 }
 document.addEventListener('click',async event=>{
-  const b=event.target.closest('button');if(!b)return;if(b.dataset.view){if(!cloud.loading&&!cloud.saving)route(b.dataset.view);return;}if(b.dataset.sheet){ui.view='sheet';await selectDept(b.dataset.sheet);return;}const id=b.dataset.id;if(cloud.loading||cloud.saving){toast('자료 조회 또는 저장이 끝난 뒤 다시 실행하세요.',true);return;}if(['backup','restore','csv','timetable-transfer','hours-import','reset-data'].includes(b.dataset.action)&&!cloud.admin){loginDialog();return;}
+  const b=event.target.closest('button');if(!b)return;if(b.dataset.view){if(!cloud.loading&&!cloud.saving)route(b.dataset.view);return;}if(b.dataset.sheet){ui.view='sheet';await selectDept(b.dataset.sheet);return;}const id=b.dataset.id;if(cloud.loading||cloud.saving){toast('자료 조회 또는 저장이 끝난 뒤 다시 실행하세요.',true);return;}if(['backup','restore','csv','timetable-transfer','timetable-sync','hours-import','reset-data'].includes(b.dataset.action)&&!cloud.admin){loginDialog();return;}
   const actions={
     'performance':showPerformance,'reset-data':resetDialog,'print-current':printCurrentForm,
     'hours-import':()=>{requireImportAdmin();document.querySelector('#hours-import-file').value='';document.querySelector('#hours-import-file').click();},
@@ -822,6 +821,14 @@ document.addEventListener('click',async event=>{
     'add-course':()=>{const item=items().find(c=>c.id===ui.newCourse);if(!item)throw new Error('개설할 과목을 선택하세요.');if(mutate(`${item.name} 개설`,s=>openCatalogItem(s,item,ui.grade))){ui.newCourse='';render();}},
     'remove-course':()=>{const c=state.courses.find(c=>c.id===id);confirmDialog('개설 과목 삭제',`${e(c.name)} (${c.grade}학년)을 이 시트에서 삭제합니다. 과목 목록에는 남습니다.`,()=>mutate(`${c.name} 개설 취소`,s=>C.removeCourse(s,id)),'삭제');},
     'backup':async()=>{await ensureAllDepartments();download(`교과시수배당_${state.school.year}_${state.school.semester}학기_백업.json`,JSON.stringify(state,null,2),'application/json;charset=utf-8');},
+    'timetable-sync':async()=>{
+      if(cloud.dirty.size||cloud.globalDirty){toast('현재 학기의 변경 내용을 먼저 저장하세요.',true);return;}
+      const term=state.school.year+'-'+state.school.semester;
+      confirmDialog('통합시간표로 전달',term+' 학기의 확정 분반을 통합시간표의 같은 학기로 전달할까요?',async()=>{
+        try{const result=await api('/timetable-transfer','POST',{term});toast(result.term+' 학기로 분반 '+result.sections+'개를 전달했습니다.');}
+        catch(error){toast(error.message,true);}
+      });
+    },
     'timetable-transfer':async()=>{requireImportAdmin();await ensureAllDepartments({stableGlobal:true});const data=C.timetableTransfer(state);download('시수배당_'+data.term+'.json',JSON.stringify(data,null,2),'application/json');},
     'restore':()=>{document.querySelector('#backup-file').value='';document.querySelector('#backup-file').click();},'csv':()=>download(`교과시수배당_${state.school.year}_${dept().name}.csv`,C.csv(state,dept().id),'text/csv;charset=utf-8'),
     'save-sheet':()=>saveSheet(b.dataset.id),'refresh':refreshServer,'print-form':printBlankForm,'password':passwordDialog,'access-password':accessPasswordDialog,'close-dialog':()=>dialog.close(),
@@ -1007,7 +1014,6 @@ document.addEventListener('pointercancel',flushInputPaint);
 window.addEventListener('blur',()=>{const active=document.activeElement;if(active?.closest?.('.allocation-table')&&active.dataset.edit){commitField(active);active.blur();}if(paintPending)flushInputPaint();clearHighlight();});
 document.addEventListener('submit',async event=>{if(event.target.id!=='school-form')return;event.preventDefault();const f=new FormData(event.target),value={name:String(f.get('name')).trim(),year:Number(f.get('year')),semester:Number(f.get('semester')),grades:[1,2,3].map(grade=>({grade,classCount:Number(f.get('class'+grade)),movingCount:Number(f.get('moving'+grade))}))};const term=value.year+'-'+value.semester;
  if(term!==state.school.year+'-'+state.school.semester){
-   if(linkedTerm){toast('통합시간표에서 학기를 변경한 뒤 새 창을 여세요.',true);return;}
    if(cloud.dirty.size||cloud.globalDirty){toast('현재 학기의 변경 내용을 먼저 저장하세요.',true);return;}
    confirmDialog('학기 전환',term+' 학기로 전환할까요? 현재 작업본은 학기별로 보관됩니다.',async()=>{try{await api('/term','POST',{term});await initialize();}catch(error){toast(error.message,true);}});return;
  }
@@ -1068,6 +1074,7 @@ function stateFromParts(global,departments,parts,history=[]){
   return S.rememberParts({schemaVersion:1,uiVersion:3,school:global.school,source:global.source??{},customCatalog:global.customCatalog??[],departments:ordered.map(p=>p.department),teachers:ordered.flatMap(p=>p.teachers),courses:ordered.flatMap(p=>p.courses),groups:ordered.flatMap(p=>p.groups),assignments:ordered.flatMap(p=>p.assignments),unmapped:ordered.flatMap(p=>p.unmapped),history},ordered);
 }
 function adopt(result){
+  if(apiTransport.linked){cloud.admin=result.admin===true;ui.mode=cloud.admin?'admin':'input';}
   if(!result.partial){
     const next=C.assertState(result.state);state=next;cloud.loaded=new Set(next.departments.map(d=>d.id));cloud.scoped=false;
     cloud.base=Object.fromEntries(next.departments.map(d=>[d.id,C.clone(S.departmentPart(next,d.id))]));
@@ -1103,10 +1110,8 @@ async function initialize(){
   catch(err){
     cloud.ready=false;
     app.innerHTML='<div class="loading"><h1>시수배당표</h1><p>'+e(err.message)+'</p>'+btn('refresh','다시 연결')+
-      (!cloud.admin?'<button type="button" id="linked-admin">관리자 로그인</button>':'')+
-      (linkedTerm&&cloud.admin&&err.code==='allocation_term_mismatch'?'<button type="button" id="linked-switch">학기 전환</button>':'')+'</div>';
+      (!apiTransport.linked&&!cloud.admin?'<button type="button" id="linked-admin">관리자 로그인</button>':'')+'</div>';
     const login=document.querySelector('#linked-admin');if(login)login.onclick=()=>loginDialog();
-    const swap=document.querySelector('#linked-switch');if(swap)swap.onclick=()=>confirmDialog('학기 전환',linkedTerm+' 학기로 전환할까요? 현재 작업본은 학기별로 보관됩니다.',async()=>{try{await api('/term','POST',{term:linkedTerm});await initialize();}catch(error){toast(error.message,true);}});
   }
 }
 async function selectDept(id){
