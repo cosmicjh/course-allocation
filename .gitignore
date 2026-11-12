@@ -11,3 +11,7 @@ dist-github/
 !.env.example
 test-results/
 *.local.json
+
+# Transient advisor exchange
+/docs/advice/request.md
+/docs/advice/response.md
