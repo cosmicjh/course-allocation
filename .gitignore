@@ -12,7 +12,7 @@ dist-github/
 test-results/
 *.local.json
 
-# Transient advisor exchange
-/docs/advice/request.md
-/docs/advice/response.md
-/docs/advice/last-error.txt
+# Separate projects
+/timetable-cloudflare/
+/class-swap-cloudflare/
+/studyroom_codex_handoff/
