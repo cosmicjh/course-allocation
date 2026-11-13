@@ -43,6 +43,11 @@ try {
         -RedirectStandardOutput $stdout -RedirectStandardError $stderr `
         -NoNewWindow -PassThru
 
+    # IMPORTANT: Windows PowerShell Start-Process may report a NULL ExitCode
+    # with -NoNewWindow / -RedirectStandard*. Cache the handle BEFORE waiting.
+    # https://github.com/PowerShell/PowerShell/issues/5421
+    $null = $p.Handle
+
     # Prevent an indefinite wait. Do not leave the main Claude process running.
     if (-not $p.WaitForExit(600000)) {
         if (-not $p.HasExited) {
@@ -62,12 +67,18 @@ try {
     if (-not [string]::IsNullOrWhiteSpace($raw)) {
         try { $obj = ConvertFrom-Json -InputObject $raw } catch { }
     }
-    if ($p.ExitCode -ne 0) {
-        $details = if ($obj -and $obj.result) { [string]$obj.result }
-                   elseif ($obj -and $obj.errors) { [string]($obj.errors -join '; ') }
+    # A NULL exit code is NOT evidence of failure or success. Fail explicitly.
+    $exitCode = $p.ExitCode
+    if ($null -eq $exitCode) {
+        $subtype = if ($obj) { [string]$obj.subtype } else { '(unavailable)' }
+        throw ('Claude exit code unavailable (PowerShell process-handle issue). JSON subtype=' + $subtype)
+    }
+    if ($exitCode -ne 0) {
+        $details = if ($obj -and $obj.errors) { [string]($obj.errors -join '; ') }
                    elseif (-not [string]::IsNullOrWhiteSpace($err)) { $err }
+                   elseif ($obj -and $obj.result) { [string]$obj.result }
                    else { $raw }
-        throw ('Claude failed (exit=' + $p.ExitCode + '): ' + (ShortDiagnostic $details))
+        throw ('Claude failed (exit=' + $exitCode + '): ' + (ShortDiagnostic $details))
     }
     if (-not $obj) {
         throw ('Claude returned invalid or empty JSON: ' + (ShortDiagnostic $raw))
