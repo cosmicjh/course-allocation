@@ -1,0 +1,1 @@
+{"model":{"_type":"시간표_솔버모델","_version":1,"teachers":["가상강사"],"buja":[],"gangsa":["가상강사"],"blocks":[],"bans":[{"grade":"1","cls":"1","subject":"수업","teacher":"가상강사","hours":28,"art":false},{"grade":"1","cls":"1","subject":"미술","teacher":"가상강사","hours":3,"art":true}],"classes":{"1":1,"2":0,"3":0}},"options":{}}

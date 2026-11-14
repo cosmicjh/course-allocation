@@ -1,6 +1,6 @@
 # 시간표 작성·검증: 확정 배당 → 솔버 JSON → Windows 로컬 계산
 
-Status: 1차 설계 승인 (2026-11-13). 원본: 인계서 `timetable-integration-handoff.md`(2026-11-10), `시간표검증기_통합.html`, `시간표_정확솔버_Colab.ipynb`, 교과배당표 XLSX(SHA-256은 인계서 §8). 원본 파일과 실데이터는 저장소에 넣지 않는다.
+Status: 1차 설계 승인 (2026-11-13). 후속: 설치 없는 브라우저 계산은 `docs/design/timetable-browser-solver.md`(2026-11-14 승인). 원본: 인계서 `timetable-integration-handoff.md`(2026-11-10), `시간표검증기_통합.html`, `시간표_정확솔버_Colab.ipynb`, 교과배당표 XLSX(SHA-256은 인계서 §8). 원본 파일과 실데이터는 저장소에 넣지 않는다.
 
 ## Context
 
