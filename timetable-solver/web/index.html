@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>시간표 로컬 솔버</title><link rel="stylesheet" href="style.css"><script src="app.js" defer></script></head>
+<body>
+<header><h1>시간표 로컬 솔버</h1><p>모델을 선택하고 계산한 뒤 검증 결과를 확인하세요.</p></header>
+<main>
+<section aria-labelledby="input-title"><h2 id="input-title">모델과 실행 옵션</h2>
+<form id="form">
+<div class="columns"><label>솔버 모델 JSON<input id="model" type="file" accept=".json,application/json" required></label><label>이전 설정 JSON · 선택 사항<input id="settings" type="file" accept=".json,application/json"></label></div>
+<p id="model-summary" role="status">모델을 선택하세요.</p>
+<fieldset><legend>이전 결과를 시작점으로 사용 · 선택 사항</legend>
+<p class="hint">유효한 이전 결과를 시작점으로 쓰면 가장 빠릅니다(권장).</p>
+<div class="columns"><label>이전 실행<select id="warm-run"><option value="">사용하지 않음</option></select></label><label>이전 result.json<input id="warm-file" type="file" accept=".json,application/json"></label></div>
+<div class="actions"><button id="warm-clear" type="button" class="secondary">시작점 선택 해제</button><span id="warm-summary" role="status">이전 결과가 없으면 1단계 시간을 늘려야 할 수 있습니다.</span></div>
+</fieldset>
+<div class="columns"><label>부장 목록 · 한 줄에 한 명<textarea id="buja" rows="3"></textarea></label><label>강사 목록 · 한 줄에 한 명<textarea id="gangsa" rows="3"></textarea></label></div>
+<fieldset><legend>불편 가중치</legend><div class="weights"><label>일별 시수<input id="over4" type="number" value="1" step="1" min="-1000000" max="1000000"></label><label>3연강<input id="run3" type="number" value="1" step="1" min="-1000000" max="1000000"></label><label>점심 끼임<input id="lunch" type="number" value="1" step="1" min="-1000000" max="1000000"></label><label>1·7교시<input id="firstlast" type="number" value="1" step="1" min="-1000000" max="1000000"></label></div></fieldset>
+<label>하루 2회 허용 과목 · 한 줄에 한 과목<textarea id="pairAllowList" rows="2" aria-describedby="pair-help"></textarea></label><p class="hint" id="pair-help">같은 날 최대 2회, 표시 교시 차이 3 이상으로 배치합니다.</p>
+<div class="columns"><label>강사 출근일수 상한 · JSON 객체<textarea id="gangsaDayCount" rows="3" spellcheck="false">{}</textarea><span class="hint">예: {"가상강사": 2} · 정확히 N일이 아닌 상한입니다.</span></label><label>블록 금지 칸 · JSON 객체<textarea id="blockTimeBan" rows="3" spellcheck="false">{}</textarea><span class="hint">예: {"3C": [[4, 6], [4, 7]]} · 월=0, 금=4</span></label></div>
+<label>종속 과목 · JSON 배열<textarea id="dependents" rows="5" spellcheck="false">[]</textarea><span class="hint">예: [{"subject":"주과목","follows":["따르는 과목"]}]</span></label>
+<fieldset><legend>단계별 제한 시간 · 초</legend><div class="weights"><label>0단계 · 완화 시작점<input id="startLimit" type="number" min="0" max="86400" value="0" required></label><label>1단계 · 배치 최대화<input id="limit1" type="number" min="0" max="86400" value="1800" required></label><label>2단계 · 최고 불편<input id="limit2" type="number" min="0" max="86400" value="600" required></label><label>2.5단계 · 총 불편<input id="limit3" type="number" min="0" max="86400" value="120" required></label></div><p class="hint">0단계는 실험적 선택 기능입니다(기본 0초: 생략). 0·2·2.5단계는 0초로 생략하며, 이전 결과를 선택해도 0단계를 생략합니다. 기본 탐색 예산은 총 42분입니다.</p></fieldset>
+<details><summary>규칙 적용 여부</summary><div class="table-wrap"><table><thead><tr><th>규칙</th><th>적용</th></tr></thead><tbody>
+<tr><td>실제 시간 교사 중복, 학급 31칸, 블록 하루 1회·같은 학년 중복 금지</td><td>고정</td></tr>
+<tr><td>부장 금1 반수업 제외(진로 예외), 3학년 진로 금1</td><td>고정</td></tr>
+<tr><td>일반교사 1·7교시 각 2~3일, 매일 2시간 이상, 최대 월4·화5·수3·목5·금5</td><td>고정 · 강사 제외</td></tr>
+<tr><td>점심 보장, 최대 3연강, 과목별 하루 1회</td><td>고정 · 강사 제외</td></tr>
+<tr><td>미술 인접 2시간 + 다른 날 1시간(4→5 제외)</td><td>고정</td></tr>
+<tr><td>강사 출근일수, 하루 2회, 종속 과목, 블록 금지 칸</td><td>위 옵션 적용</td></tr>
+<tr><td>시작점 탐색 · 완화 모델 또는 이전 결과의 배치를 힌트로 사용</td><td>학교 규칙은 바꾸지 않는 탐색 보조 · 0단계 해는 결과 채택 안 함</td></tr>
+<tr><td>artBlock · noLunchBlock · spread · coverage · coverageSubjects · bujaFridayP1Forbidden</td><td>미적용 · 원본 HTML의 미연결 설정</td></tr>
+</tbody></table></div></details>
+<div class="actions"><button id="run" type="submit" disabled>계산 시작</button><span id="message" role="status" aria-live="polite"></span></div>
+</form></section>
+<section aria-labelledby="runs-title"><div class="section-title"><h2 id="runs-title">실행 기록</h2><button id="refresh" type="button" class="secondary">새로고침</button></div><p class="hint">창을 다시 열어도 실행과 결과가 유지됩니다.</p><div id="runs" aria-live="polite">기록을 불러오는 중입니다.</div></section>
+<section id="result-section" hidden aria-labelledby="result-title"><h2 id="result-title">결과 요약</h2><div id="result"></div></section>
+</main><footer>이 PC에서 계산합니다. 콘솔 창을 닫으면 서버와 진행 중인 계산이 종료됩니다.</footer>
+</body></html>

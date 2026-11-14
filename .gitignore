@@ -16,3 +16,6 @@ test-results/
 /timetable-cloudflare/
 /class-swap-cloudflare/
 /studyroom_codex_handoff/
+
+/timetable-solver/runtime/
+/timetable-solver/runs/

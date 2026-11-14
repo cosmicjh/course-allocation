@@ -11,6 +11,7 @@ Node.js는 `package.json` 기준 22 이상, 개발·CI 기준 24이며 pnpm은 1
 - `server/`: API, D1 저장, 인증·권한과 서버 검증.
 - `functions/api/`: Pages Functions API 진입점과 health 경로.
 - `migrations/`: D1 스키마 변경 이력.
+- `timetable-solver/`: Windows 로컬 Python OR-Tools 시간표 솔버, 독립 검사기와 엑셀 출력.
 - `scripts/`: 빌드, 로컬 설정, 암호 해시와 벤치마크 도구.
 - `tests/`: 단위·통합·브라우저·Pages 시험과 가상 픽스처.
 - `docs/`: 구조, 운영·복구 기록, 검증 계약과 승인된 설계(`docs/design/`).
@@ -48,6 +49,9 @@ node tests/browser.mjs --github
 pnpm test:pages
 pnpm test:all
 pnpm benchmark
+timetable-solver\setup.cmd
+timetable-solver\runtime\python.exe -m unittest discover -s timetable-solver\tests
+timetable-solver\runtime\python.exe -m tt_solver run --model model.json --out timetable-solver\runs\manual --limits 1800,600,120
 ```
 
 로컬 초기화는 README를 따른다. `pnpm setup:local`은 비밀값 파일과 가상 픽스처를 생성할 수 있고,

@@ -88,3 +88,5 @@ dist-github/               GitHub Pages 전용 정적 출력(pnpm build:github)
 기존 화면의 CSS는 원본과 해시를 비교하는 회귀 시험으로 보호합니다.
 정적 출력에는 server/, migrations/, tests/, .dev.vars가 포함되지 않습니다.
 로컬 가상 자료·자동 테스트는 운영 DB와 연결되지 않습니다.
+
+솔버 모델 내보내기는 통합시간표 관리자 > 시간표 탭에서 실행합니다. 설치·실행은 [로컬 시간표 솔버 안내](timetable-solver/README.md)를 참고하세요.
