@@ -208,6 +208,28 @@ async function changePassword(s,data,session,env,kind,now) {
   ]);}catch(e){if(String(e).includes('auth_conflict'))fail(409,'auth_conflict','다른 관리자가 비밀번호를 변경했습니다. 다시 로그인하세요.');throw e;}
   return {accessToken:access.token,adminToken:admin.token};
 }
+// Dispatch only after the existing origin, body, authentication, bridge and policy gates.
+const authenticatedRoutes=new Map([
+  ['POST /term',(s,data,session,now)=>switchTerm(s,data.term,session,now)],
+  ['GET /auth/parameters',async(s,data,session,now,env)=>publicParameters((await credentials(s,env)).admin)],
+  ['GET /workspace',(s,data,session)=>workspace(s,data,session.role==='admin')],
+  ['GET /state',async(s,data,session)=>{
+    const w=await workspace(s,{all:true},session.role==='admin');
+    return {state:assemble(w.global,w.parts),globalRevision:w.globalRevision,revisions:w.revisions,admin:w.admin};
+  }],
+  ['POST /auth/login',async(s,data,session,now,env,request)=>{
+    await limitLogin(s,request,now);const cred=await credentials(s,env);
+    if(data.credentialEpoch!==cred.admin.epoch)fail(409,'credential_changed','관리자 비밀번호가 변경되었습니다. 다시 시도하세요.');
+    if(!await passwordMatches(data.password,cred.admin.password_hash,env.PASSWORD_PEPPER,'admin'))fail(401,'wrong_password','관리자 비밀번호가 일치하지 않습니다.');
+    const admin=await newSession(cred,'admin',now);await s.batch([admin.sql]);return {adminToken:admin.token};
+  }],
+  ['POST /auth/logout',async(s,data,session)=>{
+    if(session.role==='admin')await s.all('DELETE FROM sessions WHERE token_hash=?',session.token_hash);return {};
+  }],
+  ['POST /auth/password',(s,data,session,now,env)=>changePassword(s,data,session,env,'admin',now)],
+  ['POST /access/password',(s,data,session,now,env)=>changePassword(s,data,session,env,'access',now)],
+  ['PUT /global',(s,data,session,now)=>saveGlobal(s,data,session,now)]
+]);
 async function route(request,env,s,now) {
   if(!/^[a-f0-9]{64}$/.test(env.PASSWORD_PEPPER||''))fail(503,'setup_required','서버 PASSWORD_PEPPER 비밀값 설정이 필요합니다.');
   const url=new URL(request.url),path=url.pathname.replace(/^\/api/,'');
@@ -234,27 +256,8 @@ async function route(request,env,s,now) {
   }
   const isWorkspace=path==='/workspace'||path==='/state'||path==='/global'||path==='/term'||path.startsWith('/sheets/');
   if(isWorkspace&&!bridgeToken&&env.TIMETABLE_POLICY_ENABLED==='true')await timetablePolicy(env);
-  if(path==='/term'&&request.method==='POST'){
-    return switchTerm(s,data.term,session,now);
-  }
-  if(path==='/auth/parameters'&&request.method==='GET')return publicParameters((await credentials(s,env)).admin);
-  if(path==='/workspace'&&request.method==='GET')return workspace(s,data,session.role==='admin');
-  if(path==='/state'&&request.method==='GET'){
-    const w=await workspace(s,{all:true},session.role==='admin');
-    return {state:assemble(w.global,w.parts),globalRevision:w.globalRevision,revisions:w.revisions,admin:w.admin};
-  }
-  if(path==='/auth/login'&&request.method==='POST'){
-    await limitLogin(s,request,now);const cred=await credentials(s,env);
-    if(data.credentialEpoch!==cred.admin.epoch)fail(409,'credential_changed','관리자 비밀번호가 변경되었습니다. 다시 시도하세요.');
-    if(!await passwordMatches(data.password,cred.admin.password_hash,env.PASSWORD_PEPPER,'admin'))fail(401,'wrong_password','관리자 비밀번호가 일치하지 않습니다.');
-    const admin=await newSession(cred,'admin',now);await s.batch([admin.sql]);return {adminToken:admin.token};
-  }
-  if(path==='/auth/logout'&&request.method==='POST'){
-    if(session.role==='admin')await s.all('DELETE FROM sessions WHERE token_hash=?',session.token_hash);return {};
-  }
-  if(path==='/auth/password'&&request.method==='POST')return changePassword(s,data,session,env,'admin',now);
-  if(path==='/access/password'&&request.method==='POST')return changePassword(s,data,session,env,'access',now);
-  if(path==='/global'&&request.method==='PUT')return saveGlobal(s,data,session,now);
+  const handler=authenticatedRoutes.get(request.method+' '+path);
+  if(handler)return handler(s,data,session,now,env,request);
   const sheet=path.match(/^\/sheets\/([A-Za-z0-9_-]{1,100})$/);
   if(sheet&&request.method==='PUT')return saveSheet(s,sheet[1],data,session,now);
   fail(404,'not_found','요청한 API를 찾을 수 없습니다.');
