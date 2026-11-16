@@ -7,7 +7,9 @@ JavaScript ES modules, Cloudflare Pages Functions + D1을 사용하며 GitHub Pa
 Node.js는 `package.json` 기준 22 이상, 개발·CI 기준 24이며 pnpm은 11.25.0이다.
 
 - `index.html`, `config.js`: 화면과 공개 클라이언트 설정.
+- `app/`: 배당표 화면 CSS·런타임 소스. esbuild로 `dist/assets/`에 해시 번들을 생성한다.
 - `shared/`: 브라우저·서버가 공유하는 업무 규칙, 상태, 가져오기, 인쇄, 통신과 암호 계산.
+- `shared/ui.css`: 공통 UI 원본. 로컬 솔버와 통합시간표 vendor가 사용한다.
 - `server/`: API, D1 저장, 인증·권한과 서버 검증.
 - `functions/api/`: Pages Functions API 진입점과 health 경로.
 - `migrations/`: D1 스키마 변경 이력.

@@ -1,6 +1,6 @@
 # 교과 시수배당
 
-기존 HTML 디자인, 교과군별 배당, 실제 하위 분반, 검증·제출·확정, 관리자 설정,
+모노톤·Pretendard 기반 화면에서 교과군별 배당, 실제 하위 분반, 검증·제출·확정, 관리자 설정,
 JSON 가져오기·백업·복원, CSV, 인쇄를 유지한 Pages + Functions + D1 구현입니다.
 브라우저와 서버는 동일한 업무 검증 모듈을 사용합니다. 실행 코드에서 기존 외부 서버와
 스프레드시트 연결을 제거했습니다.
@@ -52,6 +52,20 @@ Windows에서는 설치된 도구 또는 Codex의 번들 런타임을 찾는 도
 .\scripts\run.ps1 dev
 ```
 
+## 빌드
+
+```sh
+pnpm build          # Cloudflare용 정적 출력: dist/
+pnpm build:github   # GitHub Pages용 정적 출력: dist-github/
+```
+
+`app/workbook.js`와 `app/workbook.css`를 esbuild로 번들·압축하고 `assets/`에 해시 파일명으로 생성합니다.
+출력 `index.html`은 이 자산을 상대 경로로 참조하며, `config.js`는 별도의 공개 설정 파일로 유지합니다.
+반복 빌드 시 각 출력의 `assets/`만 비워 이전 해시 자산이 누적되지 않게 합니다.
+`pnpm dev`는 먼저 빌드한 뒤 Wrangler를 실행합니다. 소스를 수정한 뒤에는 `pnpm build`를 다시 실행해 출력을 갱신합니다.
+Windows 도우미로는 `.\scripts\run.ps1 build`, `.\scripts\run.ps1 build:github`를 실행합니다.
+구조와 공통 UI 기준은 [승인 설계](docs/design/ui-unification-optimization.md)를 참고하세요.
+
 ## 시험
 
 ```sh
@@ -74,8 +88,10 @@ Windows 도우미로는 `.\scripts\run.ps1 test:all`, `.\scripts\run.ps1 benchma
 ## 디렉터리
 
 ```text
-index.html, config.js       기존 화면과 공개 설정
+index.html, config.js       화면 진입 문서와 공개 설정
+app/                       배당표 CSS·런타임 소스(esbuild 번들 입력)
 shared/                    업무 규칙, 과목 목록, 인쇄, JSON, HTTP, 성능, 암호 계산
+shared/ui.css              배당표·로컬 솔버·통합시간표 vendor의 공통 UI 원본
 functions/api/[[path]].js   Pages API 진입점
 server/                    D1, 권한, 인증, 서버 검증
 migrations/                D1 스키마
@@ -85,7 +101,7 @@ dist/                      정적 배포 파일만 생성하는 출력 디렉터
 dist-github/               GitHub Pages 전용 정적 출력(pnpm build:github)
 ```
 
-기존 화면의 CSS는 원본과 해시를 비교하는 회귀 시험으로 보호합니다.
+공통 UI와 배당표 CSS는 승인된 기준 해시를 비교하는 회귀 시험으로 보호합니다.
 정적 출력에는 server/, migrations/, tests/, .dev.vars가 포함되지 않습니다.
 로컬 가상 자료·자동 테스트는 운영 DB와 연결되지 않습니다.
 

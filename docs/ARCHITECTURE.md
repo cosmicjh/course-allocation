@@ -11,9 +11,24 @@ Cloudflare 주소에서는 dist/의 화면과 같은 출처의 /api 를 계속 �
 Functions는 기존 DB 바인딩으로 D1에 접근합니다. iframe, 외부 RPC, Google API,
 스프레드시트 SDK, 브라우저에 노출되는 DB 자격 증명은 사용하지 않습니다.
 
-index.html의 스타일과 UI 처리, 과목 목록, JSON 변환, SVG 인쇄 코드를 보존했습니다.
-C/S/R/P/H/Reset 모듈은 shared/로 추출했습니다. 서버의 상태 검증도 동일한 domain.js를 사용합니다.
-화면에서 검증을 통과했더라도 서버에서 다시 검사합니다.
+## 화면 소스와 빌드
+
+`index.html`은 화면 진입 문서이고 `config.js`는 번들과 분리된 공개 클라이언트 설정입니다.
+배당표 스타일은 `app/workbook.css`, UI 런타임은 `app/workbook.js`에서 관리합니다.
+런타임은 `shared/`의 업무 규칙·상태·과목 목록·가져오기·SVG 인쇄·통신 모듈을 정적으로 가져옵니다.
+서버의 상태 검증도 동일한 `shared/domain.js`를 사용하며, 화면에서 검증을 통과했더라도 서버에서 다시 검사합니다.
+
+`pnpm build`는 esbuild로 JS·CSS를 번들·압축해 `dist/assets/workbook-<hash>.js`와
+`workbook-<hash>.css`를 생성하고, 출력 `index.html`의 참조를 해당 파일명으로 바꿉니다.
+`pnpm build:github`는 같은 자산과 GitHub용 공개 설정을 `dist-github/`에 구성합니다.
+자산 참조는 상대 경로여서 Cloudflare 루트, GitHub Pages 하위 경로와 vendor 경로에서 사용할 수 있습니다.
+빌드를 다시 실행하면 해당 출력의 `assets/`만 비워 이전 해시 파일의 누적을 방지합니다.
+통합시간표 vendor에는 소스 대신 빌드 산출물을 반영합니다.
+
+공통 토큰과 기본 요소의 단일 원본은 `shared/ui.css`입니다. 배당표 CSS가 이를 가져와 번들에 포함하고,
+빌드는 vendor에서도 사용할 수 있도록 원본을 출력의 `shared/ui.css`에도 복사합니다.
+로컬 솔버는 정적 경로 허용 목록을 통해 같은 원본을 직접 제공하며, 통합시간표는 vendor 사본을 사용합니다.
+공통 UI와 구조 분리의 기준은 [승인 설계](design/ui-unification-optimization.md)를 따릅니다.
 
 ## 데이터와 저장
 
