@@ -1,6 +1,8 @@
-import {mkdir,copyFile,cp,writeFile,readFile} from 'node:fs/promises';
+import {mkdir,copyFile,writeFile,readFile} from 'node:fs/promises';
 import {build} from 'esbuild';
 await mkdir('dist/assets',{recursive:true});
+await mkdir('dist/shared',{recursive:true});
+await copyFile('shared/ui.css','dist/shared/ui.css');
 await copyFile('config.js','dist/config.js');
 const assets=await build({entryPoints:['app/workbook.js','app/workbook.css'],bundle:true,minify:true,format:'esm',target:'es2022',outdir:'dist/assets',entryNames:'[name]-[hash]',metafile:true});
 let html=await readFile('index.html','utf8');

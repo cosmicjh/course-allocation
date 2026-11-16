@@ -4,6 +4,7 @@ import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {resolve,sep} from 'node:path';
 import {createHarness} from './harness.mjs';
 import {hoursFixture} from './fixtures/demo.js';
+import {checkUi} from './ui-contract.mjs';
 import '../scripts/build.mjs';
 import {GITHUB_SITE,GITHUB_ORIGIN,CLOUDFLARE_API} from '../shared/deployment.js';
 
@@ -39,7 +40,7 @@ try{
   const submit=label=>page.locator('#dialog button[type=submit]').filter({hasText:label}).click();
   const save=async()=>{const response=page.waitForResponse(r=>r.url().includes('/api/sheets/')&&r.request().method()==='PUT');await button('save-sheet').click();assert.equal((await response).status(),200);await page.waitForFunction(()=>document.querySelector('.header-save')?.textContent==='저장됨');};
   const login=async target=>{await target.goto(url);await target.locator('#access-form input').fill(testAccess);await target.locator('#access-form button').click();await target.locator('[data-edit=teacher-name]').first().waitFor();};
-  await step('접속 및 기존 배당표 표시',async()=>{await login(page);await page.screenshot({path:artifactDirectory+'/01-workbook.png',fullPage:true});assert.equal(await page.locator('.plan-table').count(),1);assert.equal(await page.locator('.teacher-table').count(),1);});
+  await step('접속 및 기존 배당표 표시',async()=>{await login(page);await page.screenshot({path:artifactDirectory+'/01-workbook.png',fullPage:true});assert.equal(await page.locator('.plan-table').count(),1);assert.equal(await page.locator('.teacher-table').count(),1);await checkUi(page,'sheet',artifactDirectory);});
   const otherContext=await browser.newContext(),other=await otherContext.newPage();
   await configureRoutes(otherContext);await login(other);
   await step('교사 편집·저장 및 충돌 시 로컬 입력 보존',async()=>{
@@ -59,7 +60,9 @@ try{
     assert.equal(await revision(),before+1);
   });
   await step('관리자 로그인·제출·확정·입력 재개',async()=>{
-    await button('mode-admin').click();await page.locator('#dialog [name=password]').fill(testAdmin);await submit('진입');await page.locator('[data-view=settings]').waitFor();
+    await button('mode-admin').click();await checkUi(page,'dialog',artifactDirectory);await page.locator('#dialog [name=password]').fill(testAdmin);await submit('진입');await page.locator('[data-view=settings]').waitFor();
+    await checkUi(page,'admin-sheet',artifactDirectory);
+    await page.locator('[data-view=validation]').click();await checkUi(page,'validation',artifactDirectory);
     await page.locator('[data-view=validation]').click();await button('submit').click();await submit('제출');await save();await button('approve').click();await save();await button('reopen').click();await save();await page.locator('[data-view=sheet]').click();
   });
   await step('분반배정 JSON 가져오기·미리보기·저장',async()=>{
@@ -81,7 +84,7 @@ try{
   });
   await step('교과군 생성·학교 설정·성능 측정',async()=>{
     await button('new-dept').click();await page.locator('#dialog [name=name]').fill('가상시험교과');await submit('시트 추가');await button('save-sheet').click();await page.waitForFunction(()=>document.querySelector('.header-save')?.textContent==='저장됨');
-    await page.locator('[data-view=settings]').click();await page.locator('#school-form [name=name]').fill('가상시험학교');await page.locator('#school-form button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('.header-save')?.textContent==='저장됨');
+    await page.locator('[data-view=settings]').click();await checkUi(page,'settings',artifactDirectory);await page.locator('#school-form [name=name]').fill('가상시험학교');await page.locator('#school-form button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('.header-save')?.textContent==='저장됨');
     await button('performance').click();assert.match(await page.locator('#dialog').innerText(),/클라이언트/);await page.locator('[data-perf=close]').click();
     await page.screenshot({path:artifactDirectory+'/02-settings.png',fullPage:true});
   });

@@ -16,9 +16,10 @@ test('timetable transfer exports confirmed moving sections with semester and tea
   assert.deepEqual(C.timetableTransfer(state),{format:'school-course-allocation-transfer',schemaVersion:1,term:'2026-1',sections:[{grade:'2',subject:'가상국어 과목',code:'A',weeklyHours:3,teachers:[{name:'가상교사1',hours:3}]}]});
 });
 
-test('original stylesheet is preserved byte-for-byte after newline normalization',async()=>{
+test('approved shared and workbook stylesheets match the normalized baseline',async()=>{
   const html=(await readFile('index.html','utf8')).replace(/\r\n/g,'\n'),baseline=JSON.parse(await readFile('tests/fixtures/ui-baseline.json','utf8'));
-  assert.equal(createHash('sha256').update((await readFile('app/workbook.css','utf8')).replace(/\r\n/g,'\n')).digest('hex'),baseline.cssSha256);
+  const css=(await readFile('shared/ui.css','utf8'))+(await readFile('app/workbook.css','utf8'));
+  assert.equal(createHash('sha256').update(css.replace(/\r\n/g,'\n')).digest('hex'),baseline.cssSha256);
   assert.doesNotMatch(html,/script\.google|postMessage|gasTransport|pagesBridge/);
 });
 test('backup roundtrip and per-department partition preserve identifiers and metadata',()=>{
