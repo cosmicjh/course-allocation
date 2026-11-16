@@ -38,7 +38,8 @@ const bundle=await build({entryPoints:['app/workbook.js','app/workbook.css'],bun
 }}]});
 const assets=new Map(bundle.outputFiles.map(file=>['/'+file.path.split(/[\\/]/).at(-1),Buffer.from(file.contents)]));
 const html=(await source('index.html')).replace('./app/workbook.js','./workbook.js').replace('./app/workbook.css','./workbook.css');
-const config=await source('config.js'),h=await createHarness({seed:false}),fixture=scaleState();
+const workerScript=ref?(await build({entryPoints:['tests/worker.mjs'],bundle:true,format:'esm',platform:'browser',write:false,plugins:[{name:'baseline-api',setup(b){b.onLoad({filter:/\.js$/},async args=>({contents:await source(relative(process.cwd(),args.path)),loader:'js',resolveDir:resolve(args.path,'..')}));}}]})).outputFiles[0].text:undefined;
+const config=await source('config.js'),h=await createHarness({seed:false,workerScript}),fixture=scaleState();
 let browser;
 try{
   await h.db.prepare('DELETE FROM sheets').run();await h.db.prepare('UPDATE workspace SET payload=? WHERE id=1').bind(JSON.stringify(S.globalPart(fixture))).run();
