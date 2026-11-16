@@ -17,8 +17,9 @@ export async function checkUi(page,name,directory){
         if(!/^"?Pretendard/.test(style.fontFamily))violations.push({label,font:style.fontFamily});
       }
       const font=getComputedStyle(document.documentElement).fontFamily;
-      const host=document.createElement('style');host.textContent=':root{--ui-font:"Pretendard Host Subset",sans-serif}';document.head.append(host);
-      const hostFont=getComputedStyle(document.documentElement).fontFamily;host.remove();
+      const sheet=[...document.styleSheets].find(sheet=>sheet.href?.startsWith(location.origin));
+      const hostRule=sheet.insertRule(':root{--ui-font:"Pretendard Host Subset",sans-serif}',0);
+      const hostFont=getComputedStyle(document.documentElement).fontFamily;sheet.deleteRule(hostRule);
       return {violations,buttonCount:buttons.length,font,hostFont,overflow:document.documentElement.scrollWidth>innerWidth,escaped:[...document.querySelectorAll('.workbook-header,.workbook-nav,.sheet-heading,.sheet-dock,dialog[open]')].filter(visible).filter(e=>e.getBoundingClientRect().right>innerWidth+.5).map(e=>e.className)};
     });
     assert.ok(result.buttonCount>0,name+' has visible buttons');

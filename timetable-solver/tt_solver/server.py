@@ -166,9 +166,11 @@ def make_server(port, root):
                 except FileNotFoundError:
                     self.reply(404, {'error':'결과가 없습니다.'})
                 return
-            files = {'/':'index.html', '/app.js':'app.js', '/style.css':'style.css'}
+            # Exact paths only: the shared stylesheet is the repository's single source.
+            files = {'/': APP/'web/index.html', '/app.js': APP/'web/app.js',
+                     '/style.css': APP/'web/style.css', '/shared/ui.css': APP.parent/'shared/ui.css'}
             if self.path in files:
-                path = APP/'web'/files[self.path]
+                path = files[self.path]
                 self.reply(200, path.read_bytes(), (mimetypes.guess_type(path.name)[0] or 'text/plain')+'; charset=utf-8')
             else:
                 self.reply(404, {'error':'경로가 없습니다.'})
