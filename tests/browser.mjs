@@ -27,7 +27,7 @@ try{
     if(target.origin===GITHUB_ORIGIN&&target.pathname.startsWith('/course-allocation/')){
       const root=resolve('dist-github'),relative=decodeURIComponent(target.pathname.slice('/course-allocation/'.length))||'index.html',file=resolve(root,relative);
       if(!file.startsWith(root+sep))return route.abort();
-      return route.fulfill({status:200,contentType:file.endsWith('.js')?'text/javascript':'text/html',body:await readFile(file)});
+      return route.fulfill({status:200,contentType:file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':'text/html',body:await readFile(file)});
     }
     return route.abort();
   });

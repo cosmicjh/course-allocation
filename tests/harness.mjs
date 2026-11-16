@@ -42,7 +42,7 @@ export async function createHarness({seed=true,policy,bridge}={}){
   }
   return {mf,db,api,login,
     async listen(){
-      const root=resolve('dist'),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.json':'application/json'};
+      const root=resolve('dist'),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json'};
       server=createServer(async(req,res)=>{
         try{
           const url=new URL(req.url,'http://'+req.headers.host);

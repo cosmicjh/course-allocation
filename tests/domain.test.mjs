@@ -18,7 +18,7 @@ test('timetable transfer exports confirmed moving sections with semester and tea
 
 test('original stylesheet is preserved byte-for-byte after newline normalization',async()=>{
   const html=(await readFile('index.html','utf8')).replace(/\r\n/g,'\n'),baseline=JSON.parse(await readFile('tests/fixtures/ui-baseline.json','utf8'));
-  assert.equal(createHash('sha256').update(html.match(/<style>([\s\S]*?)<\/style>/)[1]).digest('hex'),baseline.cssSha256);
+  assert.equal(createHash('sha256').update((await readFile('app/workbook.css','utf8')).replace(/\r\n/g,'\n')).digest('hex'),baseline.cssSha256);
   assert.doesNotMatch(html,/script\.google|postMessage|gasTransport|pagesBridge/);
 });
 test('backup roundtrip and per-department partition preserve identifiers and metadata',()=>{
