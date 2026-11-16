@@ -1,7 +1,8 @@
 import './build.mjs';
-import {mkdir,copyFile,cp,writeFile} from 'node:fs/promises';
+import {mkdir,copyFile,cp,writeFile,rm} from 'node:fs/promises';
 import {CLOUDFLARE_API} from '../shared/deployment.js';
 
+await rm(new URL('../dist-github/assets',import.meta.url),{recursive:true,force:true});
 await mkdir('dist-github',{recursive:true});
 await copyFile('dist/index.html','dist-github/index.html');
 await cp('dist/assets','dist-github/assets',{recursive:true});

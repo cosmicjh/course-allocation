@@ -1,5 +1,6 @@
-import {mkdir,copyFile,writeFile,readFile} from 'node:fs/promises';
+import {mkdir,copyFile,writeFile,readFile,rm} from 'node:fs/promises';
 import {build} from 'esbuild';
+await rm(new URL('../dist/assets',import.meta.url),{recursive:true,force:true});
 await mkdir('dist/assets',{recursive:true});
 await mkdir('dist/shared',{recursive:true});
 await copyFile('shared/ui.css','dist/shared/ui.css');
