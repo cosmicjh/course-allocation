@@ -1,13 +1,9 @@
-import './build.mjs';
-import {mkdir,copyFile,cp,writeFile,rm} from 'node:fs/promises';
-import {CLOUDFLARE_API} from '../shared/deployment.js';
+import { copyFile, mkdir, rm, writeFile } from 'node:fs/promises';
 
-await rm(new URL('../dist-github/assets',import.meta.url),{recursive:true,force:true});
-await mkdir('dist-github',{recursive:true});
-await copyFile('dist/index.html','dist-github/index.html');
-await cp('dist/assets','dist-github/assets',{recursive:true});
-await mkdir('dist-github/shared',{recursive:true});
-await copyFile('dist/shared/ui.css','dist-github/shared/ui.css');
-await writeFile('dist-github/config.js','// Public configuration; authentication secrets stay on Cloudflare.\nwindow.ALLOCATION_CONFIG = '+JSON.stringify({apiBase:CLOUDFLARE_API,appId:'course-allocation-cloudflare'})+';\n');
-await writeFile('dist-github/.nojekyll','');
-console.log('GitHub Pages 정적 출력 완료: dist-github/');
+const output = new URL('../dist-github/', import.meta.url);
+const notice = new URL('../moved.html', import.meta.url);
+await rm(output, { recursive: true, force: true });
+await mkdir(output);
+await copyFile(notice, new URL('index.html', output));
+await copyFile(notice, new URL('404.html', output));
+await writeFile(new URL('.nojekyll', output), '');

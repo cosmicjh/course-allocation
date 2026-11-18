@@ -40,24 +40,5 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          package-manager-cache: false
-      - name: Wait for Cloudflare API connection
-        run: |
-          node --input-type=module <<'NODE'
-          import {GITHUB_ORIGIN,CLOUDFLARE_API} from './shared/deployment.js';
-          let ready=false;
-          for(let attempt=0;attempt<24;attempt++){
-            try{
-              const response=await fetch(CLOUDFLARE_API+'/workspace',{method:'OPTIONS',headers:{Origin:GITHUB_ORIGIN,'Access-Control-Request-Method':'GET','Access-Control-Request-Headers':'authorization'},signal:AbortSignal.timeout(10000)});
-              if(response.status===204&&response.headers.get('access-control-allow-origin')===GITHUB_ORIGIN){ready=true;break;}
-            }catch{}
-            await new Promise(resolve=>setTimeout(resolve,5000));
-          }
-          if(!ready)throw new Error('Cloudflare API is not ready for GitHub Pages');
-          NODE
       - id: deployment
         uses: actions/deploy-pages@v4

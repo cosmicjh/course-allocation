@@ -1,2 +1,6 @@
-import { handleRequest } from '../../server/api.js';
-export const onRequest = ({request,env}) => handleRequest(request,env);
+export function onRequest() {
+  return Response.json({ ok: false, code: 'COURSE_MOVED' }, {
+    status: 410,
+    headers: { 'X-Course-Allocation-Frozen': '1', 'Cache-Control': 'no-store' }
+  });
+}

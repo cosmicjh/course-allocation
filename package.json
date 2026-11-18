@@ -10,7 +10,7 @@
     "build": "node scripts/build.mjs",
     "build:github": "node scripts/build-github.mjs",
     "dev": "node scripts/build.mjs && wrangler pages dev dist",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test tests/moved.test.mjs",
     "test:browser": "node tests/browser.mjs",
     "test:pages": "node tests/pages-smoke.mjs",
     "test:all": "node --test tests/*.test.mjs && node tests/browser.mjs && node tests/browser.mjs --github && node tests/pages-smoke.mjs",
